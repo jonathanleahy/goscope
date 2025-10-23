@@ -9,6 +9,7 @@ class GoScopeVisualizer {
         this.zoom = null;
         this.hiddenFiles = new Set(); // Track hidden files by path
         this.folderTree = null; // Store folder hierarchy
+        this.detachedNodes = new Set(); // Track detached nodes by file path
 
         // Navigation history
         this.history = [];
@@ -507,6 +508,17 @@ class GoScopeVisualizer {
         this.renderGraph();
     }
 
+    toggleDetach(filePath) {
+        if (this.detachedNodes.has(filePath)) {
+            // Reattach
+            this.detachedNodes.delete(filePath);
+        } else {
+            // Detach
+            this.detachedNodes.add(filePath);
+        }
+        this.renderGraph();
+    }
+
     renderGraph() {
         if (!this.data) return;
 
@@ -545,7 +557,14 @@ class GoScopeVisualizer {
                 return 'node internal';
             })
             .call(this.drag(this.simulation))
-            .on('click', (event, d) => this.showNodeDetails(d));
+            .on('click', (event, d) => {
+                // If detached, reattach on click
+                if (this.detachedNodes.has(d.file)) {
+                    this.toggleDetach(d.file);
+                } else {
+                    this.showNodeDetails(d);
+                }
+            });
 
         // Add code block foreignObjects
         const foreignObject = node.append('foreignObject')
@@ -567,9 +586,21 @@ class GoScopeVisualizer {
                 let classes = 'code-node';
                 if (d.isTarget) classes += ' target';
                 if (d.external) classes += ' external';
+                if (this.detachedNodes.has(d.file)) classes += ' detached';
                 return classes;
             })
             .html(d => d.codeInfo.html);
+
+        // Attach detach button handlers after DOM is ready
+        setTimeout(() => {
+            document.querySelectorAll('.detach-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Don't trigger node click
+                    const file = btn.getAttribute('data-file');
+                    this.toggleDetach(file);
+                });
+            });
+        }, 50);
 
         // Store dimensions for collision detection
         node.each(d => {
@@ -636,15 +667,31 @@ class GoScopeVisualizer {
                 .attr('x1', d => this.getLinkX1(d))
                 .attr('y1', d => this.getLinkY1(d))
                 .attr('x2', d => this.getLinkX2(d))
-                .attr('y2', d => this.getLinkY2(d));
+                .attr('y2', d => this.getLinkY2(d))
+                .style('opacity', d => {
+                    // Hide links if either node is detached
+                    const sourceDetached = this.detachedNodes.has(d.source.file);
+                    const targetDetached = this.detachedNodes.has(d.target.file);
+                    return (sourceDetached || targetDetached) ? 0 : null;
+                });
 
             sourcePoints
                 .attr('cx', d => this.getLinkX1(d))
-                .attr('cy', d => this.getLinkY1(d));
+                .attr('cy', d => this.getLinkY1(d))
+                .style('opacity', d => {
+                    const sourceDetached = this.detachedNodes.has(d.source.file);
+                    const targetDetached = this.detachedNodes.has(d.target.file);
+                    return (sourceDetached || targetDetached) ? 0 : null;
+                });
 
             targetPoints
                 .attr('cx', d => this.getLinkX2(d))
-                .attr('cy', d => this.getLinkY2(d));
+                .attr('cy', d => this.getLinkY2(d))
+                .style('opacity', d => {
+                    const sourceDetached = this.detachedNodes.has(d.source.file);
+                    const targetDetached = this.detachedNodes.has(d.target.file);
+                    return (sourceDetached || targetDetached) ? 0 : null;
+                });
 
             node.attr('transform', d => `translate(${d.x},${d.y})`);
         });
@@ -844,8 +891,14 @@ class GoScopeVisualizer {
         // Escape HTML
         const escaped = displayLines.map(l => this.escapeHtml(l)).join('\n');
 
+        const isDetached = this.detachedNodes.has(node.file);
         const html = `<div class="code-node-content">
-            <div class="code-node-header">${node.name}</div>
+            <div class="code-node-header">
+                <span class="node-filename">${node.name}</span>
+                <button class="detach-btn" data-file="${node.file}" title="${isDetached ? 'Click to reattach' : 'Detach this node'}">
+                    ${isDetached ? '📌' : '✓'}
+                </button>
+            </div>
             <pre class="code-node-code language-go"><code class="language-go">${escaped}</code></pre>
             ${truncated ? '<div class="code-node-truncated">... +' + (lines.length - maxLines) + ' more lines</div>' : ''}
         </div>`;

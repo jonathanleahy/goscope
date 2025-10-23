@@ -1,0 +1,371 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #0066cc;
+    --primary-dark: #004d99;
+    --secondary: #6c757d;
+    --success: #28a745;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --border: #dee2e6;
+    --text: #212529;
+    --text-muted: #6c757d;
+
+    --node-target: #ff6b6b;
+    --node-internal: #4ecdc4;
+    --node-external: #95a5a6;
+    --edge: #bdc3c7;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    background: var(--surface);
+    padding: 1.5rem 2rem;
+    border-bottom: 2px solid var(--border);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.25rem;
+    color: var(--primary);
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+/* Controls */
+.controls {
+    background: var(--surface);
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.control-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+}
+
+.btn:hover {
+    background: var(--primary-dark);
+}
+
+.btn-primary {
+    background: var(--primary);
+}
+
+.btn-icon {
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+}
+
+.btn-close {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-close:hover {
+    color: var(--danger);
+}
+
+.file-name {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    overflow: hidden;
+}
+
+.panel {
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.graph-panel {
+    flex: 2;
+    position: relative;
+}
+
+.code-panel {
+    flex: 1;
+    min-width: 400px;
+}
+
+#graph-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.graph-info {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.legend h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-muted);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.node-icon {
+    font-size: 1.2rem;
+}
+
+.node-icon.target { color: var(--node-target); }
+.node-icon.internal { color: var(--node-internal); }
+.node-icon.external { color: var(--node-external); }
+
+.edge-line {
+    width: 30px;
+    height: 2px;
+    background: var(--edge);
+    display: inline-block;
+}
+
+/* Code Panel */
+.panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg);
+}
+
+.panel-header h2 {
+    font-size: 1.1rem;
+    color: var(--primary);
+}
+
+.code-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.empty-state {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 3rem 2rem;
+    font-size: 1.1rem;
+}
+
+.node-details {
+    margin-bottom: 2rem;
+}
+
+.detail-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 80px;
+}
+
+.detail-value {
+    color: var(--text);
+}
+
+.node-doc {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-left: 3px solid var(--primary);
+    margin: 1rem 0;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.code-block {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.code-block pre {
+    margin: 0;
+}
+
+/* Stats Bar */
+.stats-bar {
+    background: var(--surface);
+    padding: 1rem 2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 3rem;
+}
+
+.stat {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+/* SVG Styles */
+.node {
+    cursor: pointer;
+}
+
+.node circle {
+    stroke: white;
+    stroke-width: 2px;
+    transition: all 0.2s;
+}
+
+.node:hover circle {
+    stroke-width: 3px;
+    filter: brightness(1.2);
+}
+
+.node.target circle {
+    fill: var(--node-target);
+}
+
+.node.internal circle {
+    fill: var(--node-internal);
+}
+
+.node.external circle {
+    fill: var(--node-external);
+}
+
+.node text {
+    font-size: 12px;
+    pointer-events: none;
+    text-anchor: middle;
+}
+
+.link {
+    fill: none;
+    stroke: var(--edge);
+    stroke-width: 2px;
+    opacity: 0.6;
+}
+
+.link:hover {
+    stroke-width: 3px;
+    opacity: 1;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .main-content {
+        flex-direction: column;
+    }
+
+    .code-panel {
+        min-width: auto;
+        min-height: 300px;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}

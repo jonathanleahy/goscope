@@ -530,36 +530,7 @@ class GoScopeVisualizer {
             .force('x', d3.forceX(this.config.width / 2).strength(0.02))
             .force('y', d3.forceY(this.config.height / 2).strength(0.02));
 
-        // Create links
-        const linkGroup = g.append('g').attr('class', 'links');
-
-        const link = linkGroup
-            .selectAll('line')
-            .data(this.links)
-            .join('line')
-            .attr('class', 'link')
-            .attr('stroke-width', d => 1 + d.depth * 0.5);
-
-        // Add connection point circles
-        const connectionPoints = g.append('g').attr('class', 'connection-points');
-
-        // Source points (red)
-        const sourcePoints = connectionPoints
-            .selectAll('.source-point')
-            .data(this.links)
-            .join('circle')
-            .attr('class', 'connection-point source')
-            .attr('r', 4);
-
-        // Target points (teal)
-        const targetPoints = connectionPoints
-            .selectAll('.target-point')
-            .data(this.links)
-            .join('circle')
-            .attr('class', 'connection-point target')
-            .attr('r', 4);
-
-        // Create nodes
+        // Create nodes FIRST (so they render behind links)
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('g')
@@ -629,6 +600,35 @@ class GoScopeVisualizer {
                 });
             }
         }, 100);
+
+        // Create links AFTER nodes (so they render on top)
+        const linkGroup = g.append('g').attr('class', 'links');
+
+        const link = linkGroup
+            .selectAll('line')
+            .data(this.links)
+            .join('line')
+            .attr('class', 'link')
+            .attr('stroke-width', d => 1 + d.depth * 0.5);
+
+        // Add connection point circles (on top of everything)
+        const connectionPoints = g.append('g').attr('class', 'connection-points');
+
+        // Source points (red)
+        const sourcePoints = connectionPoints
+            .selectAll('.source-point')
+            .data(this.links)
+            .join('circle')
+            .attr('class', 'connection-point source')
+            .attr('r', 5);
+
+        // Target points (teal)
+        const targetPoints = connectionPoints
+            .selectAll('.target-point')
+            .data(this.links)
+            .join('circle')
+            .attr('class', 'connection-point target')
+            .attr('r', 5);
 
         // Update positions on simulation tick
         this.simulation.on('tick', () => {

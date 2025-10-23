@@ -583,16 +583,21 @@ body {
     fill: var(--primary);
     stroke: white;
     stroke-width: 2px;
-    opacity: 0.8;
+    opacity: 0.95;
     pointer-events: none;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
 }
 
 .connection-point.source {
     fill: #ff6b6b;
+    stroke: #fff;
+    stroke-width: 2.5px;
 }
 
 .connection-point.target {
     fill: #4ecdc4;
+    stroke: #fff;
+    stroke-width: 2.5px;
 }
 
 /* Responsive */
@@ -628,10 +633,10 @@ body {
 
 /* Code Block Nodes in Graph */
 .code-node {
-    background: var(--surface);
+    background: #e8e8e8;
     border: 2px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.1);
     overflow: hidden;
     font-family: 'Courier New', monospace;
     transition: all 0.2s;
@@ -676,11 +681,12 @@ body {
     padding: 10px;
     font-size: 11px;
     line-height: 1.5;
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: #f5f5f5;
+    color: #1e1e1e;
     overflow: hidden;
     white-space: pre;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    border: 1px solid rgba(0,0,0,0.1);
 }
 
 .code-node-code code {

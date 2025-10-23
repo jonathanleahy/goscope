@@ -8,6 +8,11 @@ class GoScopeVisualizer {
         this.links = [];
         this.zoom = null;
 
+        // Navigation history
+        this.history = [];
+        this.historyIndex = -1;
+        this.isNavigating = false;
+
         this.config = {
             width: 0,
             height: 0,
@@ -15,6 +20,7 @@ class GoScopeVisualizer {
             showLabels: true,
             showExternal: true,
             showDocs: true,
+            folderDepth: 'all',
         };
 
         this.init();
@@ -33,10 +39,69 @@ class GoScopeVisualizer {
         document.getElementById('show-docs').addEventListener('change', (e) => {
             this.config.showDocs = e.target.checked;
         });
+        document.getElementById('folder-depth').addEventListener('change', (e) => this.filterByFolderDepth(e.target.value));
         document.getElementById('close-code').addEventListener('click', () => this.clearCodePanel());
+        document.getElementById('nav-back').addEventListener('click', () => this.navigateBack());
+        document.getElementById('nav-forward').addEventListener('click', () => this.navigateForward());
+
+        // Set up resizable splitter
+        this.initResizer();
 
         // Initialize empty graph
         this.initializeGraph();
+    }
+
+    initResizer() {
+        const handle = document.getElementById('resize-handle');
+        const codePanel = document.getElementById('code-panel');
+        const mainContent = document.querySelector('.main-content');
+
+        let isResizing = false;
+
+        // Restore saved width from localStorage
+        const savedWidth = localStorage.getItem('codePanelWidth');
+        if (savedWidth) {
+            codePanel.style.flexBasis = savedWidth;
+            codePanel.style.flexGrow = '0';
+            codePanel.style.flexShrink = '0';
+        }
+
+        handle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            handle.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const containerRect = mainContent.getBoundingClientRect();
+            const newWidth = containerRect.right - e.clientX;
+
+            // Min 300px, max 80% of container
+            const minWidth = 300;
+            const maxWidth = containerRect.width * 0.8;
+
+            if (newWidth >= minWidth && newWidth <= maxWidth) {
+                codePanel.style.flexBasis = `${newWidth}px`;
+                codePanel.style.flexGrow = '0';
+                codePanel.style.flexShrink = '0';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                handle.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+
+                // Save width to localStorage
+                const width = codePanel.style.flexBasis;
+                localStorage.setItem('codePanelWidth', width);
+            }
+        });
     }
 
     initializeGraph() {
@@ -189,64 +254,208 @@ class GoScopeVisualizer {
     }
 
     prepareData() {
-        // Create nodes array (target + all other nodes)
-        this.nodes = [this.data.target, ...this.data.nodes];
+        // Store original symbol data for reference
+        this.symbols = [this.data.target, ...this.data.nodes];
+
+        // Group symbols by file to create file nodes
+        const fileMap = new Map();
+
+        this.symbols.forEach(symbol => {
+            if (!symbol.file) return; // Skip symbols without file info
+
+            if (!fileMap.has(symbol.file)) {
+                fileMap.set(symbol.file, {
+                    id: symbol.file,
+                    name: symbol.file.split('/').pop(), // Just the filename
+                    fullPath: symbol.file,
+                    file: symbol.file,
+                    kind: 'file',
+                    package: symbol.package,
+                    symbols: [],
+                    external: symbol.external,
+                    isTarget: symbol.isTarget || false,
+                    depth: symbol.depth || 0,
+                    exported: symbol.exported
+                });
+            }
+
+            fileMap.get(symbol.file).symbols.push(symbol);
+
+            // Mark file as target if it contains the target symbol
+            if (symbol.isTarget) {
+                fileMap.get(symbol.file).isTarget = true;
+            }
+        });
+
+        // Convert map to array
+        this.nodes = Array.from(fileMap.values());
 
         // Filter external nodes if needed
         if (!this.config.showExternal) {
             this.nodes = this.nodes.filter(n => !n.external);
         }
 
-        // Create a map of name -> id for edge resolution
-        const nameToId = new Map();
-        this.nodes.forEach(n => nameToId.set(n.name, n.id));
+        // Filter by folder depth
+        this.nodes = this.nodes.filter(n => this.shouldShowNodeByDepth(n));
 
-        // Create links from edges, resolving names to IDs
-        this.links = this.data.edges.map(edge => ({
-            source: nameToId.get(edge.from) || edge.from,
-            target: nameToId.get(edge.to) || edge.to,
-            type: edge.type,
-            depth: edge.depth,
-            label: edge.label
-        }));
+        // Create file-to-file edges from symbol dependencies
+        const fileEdges = new Map();
+
+        this.data.edges.forEach(edge => {
+            // Find source and target symbols
+            const sourceSymbol = this.symbols.find(s => s.name === edge.from);
+            const targetSymbol = this.symbols.find(s => s.name === edge.to);
+
+            if (!sourceSymbol || !targetSymbol) return;
+            if (!sourceSymbol.file || !targetSymbol.file) return;
+            if (sourceSymbol.file === targetSymbol.file) return; // Skip same-file edges
+
+            const edgeKey = `${sourceSymbol.file}->${targetSymbol.file}`;
+
+            if (!fileEdges.has(edgeKey)) {
+                fileEdges.set(edgeKey, {
+                    source: sourceSymbol.file,
+                    target: targetSymbol.file,
+                    count: 0,
+                    depth: 1,
+                    symbols: []
+                });
+            }
+
+            const fileEdge = fileEdges.get(edgeKey);
+            fileEdge.count++;
+            fileEdge.symbols.push({ from: edge.from, to: edge.to });
+        });
+
+        // Convert to array
+        this.links = Array.from(fileEdges.values());
 
         // Filter links to only include visible nodes
         const nodeIds = new Set(this.nodes.map(n => n.id));
         this.links = this.links.filter(l =>
             nodeIds.has(l.source) && nodeIds.has(l.target)
         );
+
+        console.log('File-based graph:', {
+            files: this.nodes.length,
+            links: this.links.length,
+            targetFile: this.data.target?.file
+        });
+
+        // Debug: Show distance for each file
+        if (this.nodes.length > 0 && this.data.target?.file) {
+            const targetFile = this.data.target.file;
+            const distances = this.nodes.map(n => ({
+                file: n.name,
+                distance: this.calculateFolderDistance(targetFile, n.file)
+            }));
+            console.log('All file distances:', distances);
+
+            // Count files at each distance
+            const distCounts = {};
+            distances.forEach(d => {
+                distCounts[d.distance] = (distCounts[d.distance] || 0) + 1;
+            });
+            console.log('Files per distance:', distCounts);
+        }
     }
 
-    showNodeDetails(node) {
+    calculateFolderDistance(targetFile, nodeFile) {
+        if (!targetFile || !nodeFile) return 999;
+
+        const targetParts = targetFile.split('/').filter(p => p);
+        const nodeParts = nodeFile.split('/').filter(p => p);
+
+        const targetFolder = targetParts.slice(0, -1).join('/');
+        const nodeFolder = nodeParts.slice(0, -1).join('/');
+
+        if (targetFolder === nodeFolder) return 0;
+
+        let commonLength = 0;
+        for (let i = 0; i < Math.min(targetParts.length - 1, nodeParts.length - 1); i++) {
+            if (targetParts[i] === nodeParts[i]) {
+                commonLength = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        const targetDepth = targetParts.length - 1;
+        const nodeDepth = nodeParts.length - 1;
+        const targetSteps = targetDepth - commonLength;
+        const nodeSteps = nodeDepth - commonLength;
+
+        return targetSteps + nodeSteps;
+    }
+
+    showNodeDetails(node, fromHistory = false) {
+        // Add to history if not navigating via back/forward
+        if (!fromHistory && !this.isNavigating) {
+            // Remove any forward history if we're not at the end
+            if (this.historyIndex < this.history.length - 1) {
+                this.history = this.history.slice(0, this.historyIndex + 1);
+            }
+            this.history.push(node);
+            this.historyIndex = this.history.length - 1;
+            this.updateNavigationButtons();
+        }
+
         const codeContent = document.getElementById('code-content');
         const codeTitle = document.getElementById('code-title');
 
         // Build details HTML
         let html = '<div class="node-details">';
 
-        html += `<div class="detail-row">
-            <span class="detail-label">Name:</span>
-            <span class="detail-value"><strong>${node.name}</strong></span>
-        </div>`;
-
-        html += `<div class="detail-row">
-            <span class="detail-label">Kind:</span>
-            <span class="detail-value">${node.kind}</span>
-        </div>`;
-
-        if (node.package) {
-            html += `<div class="detail-row">
-                <span class="detail-label">Package:</span>
-                <span class="detail-value">${node.package}</span>
-            </div>`;
-        }
-
-        if (node.file) {
-            const fileName = node.file.split('/').pop();
+        // For file nodes, show file info
+        if (node.kind === 'file') {
             html += `<div class="detail-row">
                 <span class="detail-label">File:</span>
-                <span class="detail-value">${fileName}:${node.line}</span>
+                <span class="detail-value"><strong>${node.name}</strong></span>
             </div>`;
+
+            html += `<div class="detail-row">
+                <span class="detail-label">Path:</span>
+                <span class="detail-value">${node.fullPath}</span>
+            </div>`;
+
+            if (node.package) {
+                html += `<div class="detail-row">
+                    <span class="detail-label">Package:</span>
+                    <span class="detail-value">${node.package}</span>
+                </div>`;
+            }
+
+            html += `<div class="detail-row">
+                <span class="detail-label">Symbols:</span>
+                <span class="detail-value">${node.symbols.length} symbols</span>
+            </div>`;
+        } else {
+            // Legacy: for individual symbol nodes
+            html += `<div class="detail-row">
+                <span class="detail-label">Name:</span>
+                <span class="detail-value"><strong>${node.name}</strong></span>
+            </div>`;
+
+            html += `<div class="detail-row">
+                <span class="detail-label">Kind:</span>
+                <span class="detail-value">${node.kind}</span>
+            </div>`;
+
+            if (node.package) {
+                html += `<div class="detail-row">
+                    <span class="detail-label">Package:</span>
+                    <span class="detail-value">${node.package}</span>
+                </div>`;
+            }
+
+            if (node.file) {
+                const fileName = node.file.split('/').pop();
+                const fileLink = this.createFileLink(node.file, node.line);
+                html += `<div class="detail-row">
+                    <span class="detail-label">Source:</span>
+                    <span class="detail-value">${fileLink}</span>
+                </div>`;
+            }
         }
 
         html += `<div class="detail-row">
@@ -268,21 +477,296 @@ class GoScopeVisualizer {
 
         html += '</div>';
 
-        // Add documentation if available
-        if (node.doc && this.config.showDocs) {
-            html += `<div class="node-doc">${this.escapeHtml(node.doc)}</div>`;
+        // For file nodes, show all symbols in the file
+        if (node.kind === 'file' && node.symbols && node.symbols.length > 0) {
+            html += '<h3>Symbols in File</h3>';
+
+            // Sort symbols by line number
+            const sortedSymbols = [...node.symbols].sort((a, b) => (a.line || 0) - (b.line || 0));
+
+            sortedSymbols.forEach(symbol => {
+                if (symbol.doc && this.config.showDocs) {
+                    html += `<div class="node-doc">${this.escapeHtml(symbol.doc)}</div>`;
+                }
+
+                if (symbol.code) {
+                    html += `<h4>${symbol.name} (${symbol.kind})</h4>`;
+                    const highlightedCode = this.highlightCode(symbol.code, symbol.name, symbol.kind);
+                    html += `<div class="code-block"><pre class="language-go"><code class="language-go">${highlightedCode}</code></pre></div>`;
+                }
+            });
+        } else {
+            // Legacy: for individual symbol nodes
+            // Add documentation if available
+            if (node.doc && this.config.showDocs) {
+                html += `<div class="node-doc">${this.escapeHtml(node.doc)}</div>`;
+            }
+
+            // Add code if available
+            if (node.code) {
+                html += '<h3>Code</h3>';
+                console.log('Processing code for:', node.name, 'kind:', node.kind);
+                const highlightedCode = this.highlightCode(node.code, node.name, node.kind);
+                console.log('Highlighted code length:', highlightedCode.length);
+                html += `<div class="code-block"><pre class="language-go"><code class="language-go">${highlightedCode}</code></pre></div>`;
+            } else if (node.external) {
+                html += '<div class="empty-state">External symbol - code not available</div>';
+            } else {
+                console.warn('No code available for node:', node.name);
+            }
         }
 
-        // Add code if available
-        if (node.code) {
-            html += '<h3>Code</h3>';
-            html += `<div class="code-block"><pre>${this.escapeHtml(node.code)}</pre></div>`;
-        } else if (node.external) {
-            html += '<div class="empty-state">External symbol - code not available</div>';
-        }
-
-        codeTitle.textContent = `${node.name} (${node.kind})`;
+        codeTitle.textContent = node.kind === 'file' ? node.name : `${node.name} (${node.kind})`;
         codeContent.innerHTML = html;
+
+        // Check if code-link spans exist before Prism
+        const linksBeforePrism = codeContent.querySelectorAll('.code-link');
+        console.log('Code links before Prism:', linksBeforePrism.length);
+
+        // Apply Prism highlighting after inserting HTML
+        if (typeof Prism !== 'undefined') {
+            Prism.highlightAllUnder(codeContent);
+        }
+
+        // Check if code-link spans exist after Prism
+        const linksAfterPrism = codeContent.querySelectorAll('.code-link');
+        console.log('Code links after Prism:', linksAfterPrism.length);
+
+        // Add click handlers for code links
+        this.attachCodeLinkHandlers();
+
+        // Update breadcrumb
+        this.updateBreadcrumb();
+    }
+
+    updateBreadcrumb() {
+        const breadcrumb = document.getElementById('breadcrumb');
+        if (this.history.length === 0) {
+            breadcrumb.innerHTML = '';
+            return;
+        }
+
+        // Show last 5 items
+        const start = Math.max(0, this.historyIndex - 4);
+        const items = this.history.slice(start, this.historyIndex + 1);
+
+        breadcrumb.innerHTML = items.map((node, index) => {
+            const actualIndex = start + index;
+            const isActive = actualIndex === this.historyIndex;
+            const className = isActive ? 'breadcrumb-item active' : 'breadcrumb-item';
+            const onclick = isActive ? '' : `onclick="window.goScopeViz.navigateToHistory(${actualIndex})"`;
+
+            return `
+                ${index > 0 ? '<span class="breadcrumb-separator">›</span>' : ''}
+                <span class="${className}" ${onclick}>${node.name}</span>
+            `;
+        }).join('');
+    }
+
+    navigateToHistory(index) {
+        if (index < 0 || index >= this.history.length) return;
+
+        this.historyIndex = index;
+        this.isNavigating = true;
+        this.showNodeDetails(this.history[index], true);
+        this.highlightNode(this.history[index]);
+        this.isNavigating = false;
+        this.updateNavigationButtons();
+    }
+
+    navigateBack() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.isNavigating = true;
+            const node = this.history[this.historyIndex];
+            this.showNodeDetails(node, true);
+            this.highlightNode(node);
+            this.isNavigating = false;
+            this.updateNavigationButtons();
+        }
+    }
+
+    navigateForward() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.isNavigating = true;
+            const node = this.history[this.historyIndex];
+            this.showNodeDetails(node, true);
+            this.highlightNode(node);
+            this.isNavigating = false;
+            this.updateNavigationButtons();
+        }
+    }
+
+    updateNavigationButtons() {
+        const backBtn = document.getElementById('nav-back');
+        const forwardBtn = document.getElementById('nav-forward');
+
+        backBtn.disabled = this.historyIndex <= 0;
+        forwardBtn.disabled = this.historyIndex >= this.history.length - 1;
+    }
+
+    attachCodeLinkHandlers() {
+        const codeLinks = document.querySelectorAll('.code-link');
+        console.log('Found code links:', codeLinks.length);
+
+        codeLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const nodeId = link.getAttribute('data-node-id');
+                const nodeName = link.getAttribute('data-node-name');
+
+                console.log('Code link clicked:', nodeName);
+
+                // Find the node
+                const node = this.nodes.find(n => n.id === nodeId || n.name === nodeName);
+                if (node) {
+                    console.log('Navigating to node:', node.name);
+                    // Show the node details
+                    this.showNodeDetails(node);
+
+                    // Highlight the node in the graph
+                    this.highlightNode(node);
+                } else {
+                    console.error('Node not found:', nodeName, nodeId);
+                }
+            });
+        });
+    }
+
+    highlightNode(node) {
+        // Remove previous highlights
+        this.svg.selectAll('.node').classed('highlighted', false);
+
+        // Add highlight to the target node
+        this.svg.selectAll('.node')
+            .filter(d => d.id === node.id)
+            .classed('highlighted', true)
+            .raise(); // Bring to front
+
+        // Optionally center on the node
+        if (node.x && node.y) {
+            const transform = d3.zoomIdentity
+                .translate(this.config.width / 2, this.config.height / 2)
+                .scale(1.5)
+                .translate(-node.x, -node.y);
+
+            this.svg.transition()
+                .duration(500)
+                .call(this.zoom.transform, transform);
+        }
+    }
+
+    createFileLink(filePath, line) {
+        const fileName = filePath.split('/').pop();
+        const displayText = `${fileName}:${line}`;
+
+        // Create an ID for this specific copy button
+        const buttonId = `copy-${Math.random().toString(36).substr(2, 9)}`;
+
+        // VS Code URI for opening files
+        const vscodeUri = `vscode://file${filePath}:${line}`;
+
+        // Create clickable file link and copy button
+        const fileLink = `<a href="${vscodeUri}" class="file-link-clickable" title="${filePath}\nClick to open in VS Code">${displayText}</a>`;
+        const copyButton = `<button id="${buttonId}" class="copy-btn" data-path="${filePath}:${line}" title="Copy file path">📋</button>`;
+
+        // Set up the click handler after DOM insertion
+        setTimeout(() => {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const path = btn.getAttribute('data-path');
+                    navigator.clipboard.writeText(path).then(() => {
+                        btn.textContent = '✓';
+                        btn.style.color = 'green';
+                        setTimeout(() => {
+                            btn.textContent = '📋';
+                            btn.style.color = '';
+                        }, 1000);
+                    });
+                });
+            }
+        }, 0);
+
+        return `${fileLink} ${copyButton}`;
+    }
+
+    highlightCode(code, symbolName, kind) {
+        // DISABLED: app-simple.js now handles linking AFTER Prism
+        // let result = this.linkifyIdentifiers(code);
+
+        // Escape HTML
+        let result = this.escapeHtml(code);
+
+        // For functions, highlight the function name
+        if (kind === 'func' || kind === 'method') {
+            const funcPattern = new RegExp(`\\b(func\\s+(?:\\([^)]*\\)\\s+)?)(${this.escapeRegex(symbolName)})(\\s*\\()`, 'g');
+            result = result.replace(funcPattern, '$1<mark class="highlight-symbol">$2</mark>$3');
+        }
+
+        // For types, highlight the type name
+        if (kind === 'struct' || kind === 'interface' || kind === 'type') {
+            const typePattern = new RegExp(`\\b(type\\s+)(${this.escapeRegex(symbolName)})(\\s+)`, 'g');
+            result = result.replace(typePattern, '$1<mark class="highlight-symbol">$2</mark>$3');
+        }
+
+        return result;
+    }
+
+    linkifyIdentifiers(code) {
+        if (!this.data || !this.nodes) {
+            console.log('No data or nodes available for linkifying');
+            return code;
+        }
+
+        // Build a map of symbol names to nodes
+        const symbolMap = new Map();
+        this.nodes.forEach(node => {
+            if (node.name && !node.external) {
+                symbolMap.set(node.name, node);
+            }
+        });
+
+        console.log('Symbol map size:', symbolMap.size);
+        console.log('Available symbols:', Array.from(symbolMap.keys()).slice(0, 20).join(', '));
+
+        // Sort by length (longest first) to avoid partial matches
+        const symbols = Array.from(symbolMap.keys()).sort((a, b) => b.length - a.length);
+
+        let linkCount = 0;
+
+        // Replace each symbol with a clickable link
+        symbols.forEach(symbolName => {
+            const node = symbolMap.get(symbolName);
+            const escapedName = this.escapeRegex(symbolName);
+
+            // Simple word boundary match - this runs BEFORE HTML escaping
+            const pattern = new RegExp(`\\b(${escapedName})\\b`, 'g');
+            const replacement = `\x00LINK_START\x00${node.id}\x00${node.name}\x00$1\x00LINK_END\x00`;
+
+            const before = code;
+            code = code.replace(pattern, replacement);
+            if (code !== before) {
+                linkCount += (code.match(pattern) || []).length;
+            }
+        });
+
+        console.log('Created', linkCount, 'potential links');
+        return code;
+    }
+
+    escapeHtml(text) {
+        // Simple HTML escape - app-simple.js handles linking
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     clearCodePanel() {
@@ -339,6 +823,77 @@ class GoScopeVisualizer {
             .style('display', this.config.showLabels ? 'block' : 'none');
     }
 
+    // Folder depth filtering
+    filterByFolderDepth(mode) {
+        this.config.folderDepth = mode;
+        if (this.data) {
+            this.renderGraph();
+            this.updateStats();
+        }
+    }
+
+    calculateFolderDepth(targetFile, nodeFile) {
+        if (!targetFile || !nodeFile) return 0;
+
+        const targetParts = targetFile.split('/').filter(p => p);
+        const nodeParts = nodeFile.split('/').filter(p => p);
+
+        // Get folder paths (exclude filename)
+        const targetFolder = targetParts.slice(0, -1).join('/');
+        const nodeFolder = nodeParts.slice(0, -1).join('/');
+
+        // If exact same folder, depth is 0
+        if (targetFolder === nodeFolder) {
+            return 0;
+        }
+
+        // Find common ancestor
+        let commonLength = 0;
+        for (let i = 0; i < Math.min(targetParts.length - 1, nodeParts.length - 1); i++) {
+            if (targetParts[i] === nodeParts[i]) {
+                commonLength = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        // Calculate depth from common ancestor
+        const targetDepth = targetParts.length - 1; // -1 to exclude filename
+        const nodeDepth = nodeParts.length - 1;
+
+        // Steps from common ancestor to each folder
+        const targetSteps = targetDepth - commonLength;
+        const nodeSteps = nodeDepth - commonLength;
+
+        // If target is deeper, node is "up" (negative)
+        // If node is deeper, node is "down" (positive)
+        if (targetSteps === 0 && nodeSteps > 0) {
+            // Node is below target folder
+            return nodeSteps;
+        } else if (nodeSteps === 0 && targetSteps > 0) {
+            // Node is above target folder
+            return -targetSteps;
+        } else {
+            // Different branches - return total distance
+            return targetSteps + nodeSteps;
+        }
+    }
+
+    shouldShowNodeByDepth(node) {
+        if (this.config.folderDepth === 'all') return true;
+        if (!this.data || !this.data.target) return true;
+
+        const targetFile = this.data.target.file;
+        const nodeFile = node.file;
+
+        if (!targetFile || !nodeFile) return true;
+
+        const distance = this.calculateFolderDistance(targetFile, nodeFile);
+        const maxDistance = parseInt(this.config.folderDepth);
+
+        return distance <= maxDistance;
+    }
+
     toggleExternal(show) {
         this.config.showExternal = show;
         if (this.data) {
@@ -382,5 +937,7 @@ class GoScopeVisualizer {
 
 // Initialize visualizer when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    new GoScopeVisualizer();
+    const viz = new GoScopeVisualizer();
+    window.goScopeViz = viz;
+    document.goScopeViz = viz;
 });

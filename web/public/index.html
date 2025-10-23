@@ -39,6 +39,24 @@
                     <input type="checkbox" id="show-docs" checked> Show Docs
                 </label>
             </div>
+
+            <div class="control-group">
+                <label for="folder-depth">📁 Folder Distance:</label>
+                <select id="folder-depth" class="depth-select">
+                    <option value="all">All Files</option>
+                    <option value="0">0 - Same Folder Only</option>
+                    <option value="1">≤1 - Up to 1 Away</option>
+                    <option value="2">≤2 - Up to 2 Away</option>
+                    <option value="3">≤3 - Up to 3 Away</option>
+                    <option value="4">≤4 - Up to 4 Away</option>
+                    <option value="5">≤5 - Up to 5 Away</option>
+                    <option value="6">≤6 - Up to 6 Away</option>
+                    <option value="7">≤7 - Up to 7 Away</option>
+                    <option value="8">≤8 - Up to 8 Away</option>
+                    <option value="9">≤9 - Up to 9 Away</option>
+                    <option value="10">≤10 - Up to 10 Away</option>
+                </select>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -66,8 +84,14 @@
             </div>
 
             <!-- Right Panel: Code Display -->
-            <div class="panel code-panel">
+            <div class="panel code-panel" id="code-panel">
+                <div class="resize-handle" id="resize-handle"></div>
                 <div class="panel-header">
+                    <div class="nav-controls">
+                        <button id="nav-back" class="btn btn-icon" title="Go back" disabled>◀</button>
+                        <button id="nav-forward" class="btn btn-icon" title="Go forward" disabled>▶</button>
+                        <div id="breadcrumb" class="breadcrumb"></div>
+                    </div>
                     <h2 id="code-title">Select a node to view code</h2>
                     <button id="close-code" class="btn-close">✕</button>
                 </div>
@@ -102,6 +126,18 @@
 
     <!-- Scripts -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="app.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
+    <script src="app.js?v=17"></script>
+    <script src="app-simple.js?v=17"></script>
+    <script>
+        // Store reference for monkey patch
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                window.goScopeViz = document.goScopeViz;
+            }, 100);
+        });
+    </script>
 </body>
 </html>

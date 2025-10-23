@@ -531,13 +531,33 @@ class GoScopeVisualizer {
             .force('y', d3.forceY(this.config.height / 2).strength(0.02));
 
         // Create links
-        const link = g.append('g')
-            .attr('class', 'links')
+        const linkGroup = g.append('g').attr('class', 'links');
+
+        const link = linkGroup
             .selectAll('line')
             .data(this.links)
             .join('line')
             .attr('class', 'link')
             .attr('stroke-width', d => 1 + d.depth * 0.5);
+
+        // Add connection point circles
+        const connectionPoints = g.append('g').attr('class', 'connection-points');
+
+        // Source points (red)
+        const sourcePoints = connectionPoints
+            .selectAll('.source-point')
+            .data(this.links)
+            .join('circle')
+            .attr('class', 'connection-point source')
+            .attr('r', 4);
+
+        // Target points (teal)
+        const targetPoints = connectionPoints
+            .selectAll('.target-point')
+            .data(this.links)
+            .join('circle')
+            .attr('class', 'connection-point target')
+            .attr('r', 4);
 
         // Create nodes
         const node = g.append('g')
@@ -613,10 +633,18 @@ class GoScopeVisualizer {
         // Update positions on simulation tick
         this.simulation.on('tick', () => {
             link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
+                .attr('x1', d => this.getLinkX1(d))
+                .attr('y1', d => this.getLinkY1(d))
+                .attr('x2', d => this.getLinkX2(d))
+                .attr('y2', d => this.getLinkY2(d));
+
+            sourcePoints
+                .attr('cx', d => this.getLinkX1(d))
+                .attr('cy', d => this.getLinkY1(d));
+
+            targetPoints
+                .attr('cx', d => this.getLinkX2(d))
+                .attr('cy', d => this.getLinkY2(d));
 
             node.attr('transform', d => `translate(${d.x},${d.y})`);
         });
@@ -768,17 +796,26 @@ class GoScopeVisualizer {
     // Prepare code for display in graph nodes
     prepareCodeForNode(node) {
         if (!node.symbols || node.symbols.length === 0) {
-            return { html: '<div class="empty-code">No code available</div>', lines: 1 };
+            return { html: '<div class="empty-code">No code available</div>', lines: 1, symbolLineMap: {} };
         }
 
         // Combine all symbol code from this file
         let allCode = '';
         let symbolMap = []; // Track which lines belong to which symbol
+        let symbolLineMap = {}; // Map symbol names to their line ranges
 
         node.symbols.forEach((symbol, idx) => {
             if (symbol.code) {
                 const lines = symbol.code.split('\n');
                 const startLine = allCode.split('\n').length;
+                const endLine = startLine + lines.length - 1;
+
+                // Store symbol's line range
+                symbolLineMap[symbol.name] = {
+                    startLine: startLine,
+                    endLine: endLine,
+                    middleLine: Math.floor((startLine + endLine) / 2)
+                };
 
                 lines.forEach((line, lineIdx) => {
                     symbolMap.push({
@@ -817,6 +854,7 @@ class GoScopeVisualizer {
             html,
             lines: displayLines.length,
             symbolMap,
+            symbolLineMap,
             totalLines: lines.length
         };
     }
@@ -1272,6 +1310,66 @@ class GoScopeVisualizer {
                 document.msExitFullscreen();
             }
         }
+    }
+
+    // Calculate link anchor points at specific code lines
+    getLineYOffset(node, symbolName) {
+        if (!node.codeInfo || !node.codeInfo.symbolLineMap) {
+            return 0; // Default to center
+        }
+
+        const symbolInfo = node.codeInfo.symbolLineMap[symbolName];
+        if (!symbolInfo) {
+            return 0; // Symbol not found, use center
+        }
+
+        // Use the middle line of the symbol
+        const lineNumber = symbolInfo.middleLine;
+        const lineHeight = this.config.codeBlockFontSize * 1.5;
+        const headerHeight = 30;
+
+        // Calculate offset from node center
+        const totalHeight = node.codeInfo.lines * lineHeight;
+        const nodeTop = -totalHeight / 2 - 15; // Top of the code block
+        const lineY = nodeTop + headerHeight + (lineNumber * lineHeight) + (lineHeight / 2);
+
+        return lineY;
+    }
+
+    getLinkX1(link) {
+        // Source node x position
+        return link.source.x;
+    }
+
+    getLinkY1(link) {
+        // Source node y position at specific line
+        if (!link.symbols || link.symbols.length === 0) {
+            return link.source.y;
+        }
+
+        // Use the first symbol connection as representative
+        const firstConnection = link.symbols[0];
+        const lineOffset = this.getLineYOffset(link.source, firstConnection.from);
+
+        return link.source.y + lineOffset;
+    }
+
+    getLinkX2(link) {
+        // Target node x position
+        return link.target.x;
+    }
+
+    getLinkY2(link) {
+        // Target node y position at specific line
+        if (!link.symbols || link.symbols.length === 0) {
+            return link.target.y;
+        }
+
+        // Use the first symbol connection as representative
+        const firstConnection = link.symbols[0];
+        const lineOffset = this.getLineYOffset(link.target, firstConnection.to);
+
+        return link.target.y + lineOffset;
     }
 
     toggleLabels() {

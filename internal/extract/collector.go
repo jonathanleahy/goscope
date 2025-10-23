@@ -7,6 +7,7 @@ import (
 	"go/token"
 	gotypes "go/types"
 
+	"github.com/extract-scope-go/go-scope/internal/extract/di"
 	"github.com/extract-scope-go/go-scope/internal/types"
 	"golang.org/x/tools/go/packages"
 )
@@ -540,11 +541,32 @@ func ExtractSymbol(ctx context.Context, target types.Target, opts types.Options)
 		return nil, fmt.Errorf("failed to collect dependencies: %w", err)
 	}
 
-	// Step 3: Build extract
+	// Step 3: Analyze interfaces and implementations
+	allSymbols := []types.Symbol{*symbol}
+	for _, ref := range references {
+		allSymbols = append(allSymbols, ref.Symbol)
+	}
+
+	interfaceAnalyzer := NewInterfaceAnalyzer(locator.pkgs, locator.fset)
+	interfaceMappings := interfaceAnalyzer.AnalyzeInterfaces(allSymbols)
+
+	// Add interface relationship references
+	interfaceRefs := ExtractInterfaceReferences(interfaceMappings, opts.Depth+1)
+	references = append(references, interfaceRefs...)
+
+	// Step 4: Detect DI framework and analyze bindings
+	diDetector := di.NewDetector(locator.pkgs, locator.fset)
+	detectedFramework := diDetector.DetectFramework()
+	diBindings := diDetector.AnalyzeDIBindings(allSymbols)
+
+	// Step 5: Build extract
 	extract := types.Extract{
-		Target:     *symbol,
-		References: references,
-		External:   external,
+		Target:              *symbol,
+		References:          references,
+		External:            external,
+		InterfaceMappings:   interfaceMappings,
+		DIBindings:          diBindings,
+		DetectedDIFramework: detectedFramework,
 	}
 
 	// Step 4: Format output (will be done by API layer to avoid circular imports)

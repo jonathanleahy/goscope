@@ -1,15 +1,23 @@
 # Go Scope Extractor
 
-A tool to extract Go code with its dependencies for review and understanding. Unlike traditional code navigation tools that focus on compilation, this tool is designed specifically for **code review and comprehension**.
+**Architecture-aware Go code extraction and visualization tool** for understanding dependencies, scope, and hexagonal patterns.
+
+Extract Go code with its dependencies, discover interface→implementation mappings, detect DI frameworks, and visualize your architecture.
 
 ## Key Features
 
-- **Review-Focused**: Extracts readable code with functional context, not necessarily compilable code
-- **Depth-Limited Extraction**: Control how deep to traverse dependencies (0=target only, 1=direct deps, 2=transitive deps, etc.)
-- **Multiple Output Formats**: Markdown (default), JSON, HTML
-- **Smart Dependency Resolution**: Uses BFS traversal to gather dependencies systematically
-- **Documentation Included**: Preserves documentation comments
-- **External Reference Tracking**: Lists external packages used
+### Phase 1 & 2 (Core + Visualizer)
+- **Review-Focused**: Extracts readable code with functional context
+- **Depth-Limited Extraction**: Control dependency traversal depth (0=target only, 1=direct, 2=transitive, etc.)
+- **Multiple Output Formats**: Markdown, JSON, HTML
+- **Smart Dependency Resolution**: BFS traversal for systematic gathering
+- **Interactive Web Visualizer**: D3.js force-directed graph with zoom, drag, and code viewing
+
+### Phase 3 (Architecture Analysis) 🆕
+- **Interface Detection**: Automatically discovers interfaces implemented by structs
+- **DI Framework Detection**: Recognizes Wire, Fx, and manual DI patterns
+- **Hexagonal Architecture**: Visual identification of ports, adapters, and factories
+- **Semantic Visualization**: Color-coded nodes for interfaces (green), implementations (purple), constructors (orange)
 
 ## Installation
 

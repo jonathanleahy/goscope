@@ -60,6 +60,52 @@ func ToJSON(ext types.Extract, opts types.Options) (string, error) {
 		}
 	}
 
+	// Add interface mappings
+	if len(ext.InterfaceMappings) > 0 {
+		for _, mapping := range ext.InterfaceMappings {
+			mappingData := InterfaceMappingData{
+				Interface:       convertSymbolToNode(mapping.Interface, 0, false),
+				Implementations: []Node{},
+				DIFramework:     mapping.DIFramework,
+			}
+
+			for _, impl := range mapping.Implementations {
+				implNode := convertSymbolToNode(impl, 0, false)
+				mappingData.Implementations = append(mappingData.Implementations, implNode)
+			}
+
+			if mapping.Constructor != nil {
+				constructorNode := convertSymbolToNode(*mapping.Constructor, 0, false)
+				mappingData.Constructor = &constructorNode
+			}
+
+			viz.InterfaceMappings = append(viz.InterfaceMappings, mappingData)
+		}
+	}
+
+	// Add DI bindings
+	if len(ext.DIBindings) > 0 {
+		for _, binding := range ext.DIBindings {
+			bindingData := DIBindingData{
+				Provider:     convertSymbolToNode(binding.Provider, 0, false),
+				Product:      convertSymbolToNode(binding.Product, 0, false),
+				Dependencies: []Node{},
+				Framework:    binding.Framework,
+				Scope:        binding.Scope,
+			}
+
+			for _, dep := range binding.Dependencies {
+				depNode := convertSymbolToNode(dep, 0, false)
+				bindingData.Dependencies = append(bindingData.Dependencies, depNode)
+			}
+
+			viz.DIBindings = append(viz.DIBindings, bindingData)
+		}
+	}
+
+	// Add detected DI framework
+	viz.DetectedDIFramework = ext.DetectedDIFramework
+
 	// Marshal to JSON with indentation
 	data, err := json.MarshalIndent(viz, "", "  ")
 	if err != nil {
@@ -71,13 +117,16 @@ func ToJSON(ext types.Extract, opts types.Options) (string, error) {
 
 // VisualizationData is the JSON structure for the web visualizer
 type VisualizationData struct {
-	Target      Node          `json:"target"`
-	Nodes       []Node        `json:"nodes"`
-	Edges       []Edge        `json:"edges"`
-	External    []string      `json:"external,omitempty"`
-	Metrics     *MetricsData  `json:"metrics,omitempty"`
-	Options     types.Options `json:"options"`
-	TotalLayers int           `json:"totalLayers"`
+	Target              Node                    `json:"target"`
+	Nodes               []Node                  `json:"nodes"`
+	Edges               []Edge                  `json:"edges"`
+	External            []string                `json:"external,omitempty"`
+	Metrics             *MetricsData            `json:"metrics,omitempty"`
+	Options             types.Options           `json:"options"`
+	TotalLayers         int                     `json:"totalLayers"`
+	InterfaceMappings   []InterfaceMappingData  `json:"interfaceMappings,omitempty"`
+	DIBindings          []DIBindingData         `json:"diBindings,omitempty"`
+	DetectedDIFramework string                  `json:"detectedDIFramework,omitempty"`
 }
 
 // Node represents a symbol node in the visualization
@@ -115,6 +164,23 @@ type MetricsData struct {
 	DirectDeps           int      `json:"directDeps"`
 	TransitiveDeps       int      `json:"transitiveDeps"`
 	ExternalPackages     []string `json:"externalPackages"`
+}
+
+// InterfaceMappingData holds interface-to-implementation mapping
+type InterfaceMappingData struct {
+	Interface       Node    `json:"interface"`
+	Implementations []Node  `json:"implementations"`
+	Constructor     *Node   `json:"constructor,omitempty"`
+	DIFramework     string  `json:"diFramework,omitempty"`
+}
+
+// DIBindingData holds dependency injection binding information
+type DIBindingData struct {
+	Provider     Node     `json:"provider"`
+	Product      Node     `json:"product"`
+	Dependencies []Node   `json:"dependencies"`
+	Framework    string   `json:"framework"`
+	Scope        string   `json:"scope"`
 }
 
 // convertSymbolToNode converts a Symbol to a visualization Node

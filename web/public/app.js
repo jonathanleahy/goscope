@@ -73,11 +73,36 @@ class GoScopeVisualizer {
         try {
             const text = await file.text();
             this.data = JSON.parse(text);
+
+            // Validate required fields
+            if (!this.data.target) {
+                throw new Error('Missing "target" field in JSON');
+            }
+            if (!this.data.nodes) {
+                this.data.nodes = [];
+            }
+            if (!this.data.edges) {
+                this.data.edges = [];
+            }
+            if (!this.data.external) {
+                this.data.external = [];
+            }
+
+            console.log('Loaded data:', {
+                target: this.data.target.name,
+                nodes: this.data.nodes.length,
+                edges: this.data.edges.length,
+                external: this.data.external.length,
+                interfaceMappings: (this.data.interfaceMappings || []).length,
+                diBindings: (this.data.diBindings || []).length,
+                diFramework: this.data.detectedDIFramework || 'none'
+            });
+
             this.renderGraph();
             this.updateStats();
         } catch (error) {
             console.error('Error loading file:', error);
-            alert('Error loading JSON file. Please ensure it\'s a valid go-scope JSON extract.');
+            alert('Error loading JSON file: ' + error.message + '\n\nPlease ensure it\'s a valid go-scope JSON extract.');
         }
     }
 
@@ -121,6 +146,9 @@ class GoScopeVisualizer {
             .attr('class', d => {
                 if (d.isTarget) return 'node target';
                 if (d.external) return 'node external';
+                if (d.kind === 'interface') return 'node interface';
+                if (d.kind === 'struct' && this.isImplementation(d.name)) return 'node implementation';
+                if (d.kind === 'func' && d.name.startsWith('New')) return 'node constructor';
                 return 'node internal';
             })
             .call(this.drag(this.simulation))
@@ -169,17 +197,21 @@ class GoScopeVisualizer {
             this.nodes = this.nodes.filter(n => !n.external);
         }
 
-        // Create links from edges
+        // Create a map of name -> id for edge resolution
+        const nameToId = new Map();
+        this.nodes.forEach(n => nameToId.set(n.name, n.id));
+
+        // Create links from edges, resolving names to IDs
         this.links = this.data.edges.map(edge => ({
-            source: edge.from,
-            target: edge.to,
+            source: nameToId.get(edge.from) || edge.from,
+            target: nameToId.get(edge.to) || edge.to,
             type: edge.type,
             depth: edge.depth,
             label: edge.label
         }));
 
         // Filter links to only include visible nodes
-        const nodeIds = new Set(this.nodes.map(n => n.name));
+        const nodeIds = new Set(this.nodes.map(n => n.id));
         this.links = this.links.filter(l =>
             nodeIds.has(l.source) && nodeIds.has(l.target)
         );
@@ -266,6 +298,23 @@ class GoScopeVisualizer {
         document.getElementById('stat-edges').textContent = this.data.edges.length;
         document.getElementById('stat-depth').textContent = this.data.totalLayers;
         document.getElementById('stat-external').textContent = this.data.external?.length || 0;
+
+        // Show Phase 3 stats if available
+        if (this.data.interfaceMappings && this.data.interfaceMappings.length > 0) {
+            console.log(`📐 Arch: ${this.data.interfaceMappings.length} interfaces, DI: ${this.data.detectedDIFramework}`);
+        }
+    }
+
+    // Check if a node is an implementation in interface mappings
+    isImplementation(nodeName) {
+        if (!this.data.interfaceMappings) return false;
+
+        for (const mapping of this.data.interfaceMappings) {
+            for (const impl of mapping.implementations) {
+                if (impl.name === nodeName) return true;
+            }
+        }
+        return false;
     }
 
     // Zoom controls

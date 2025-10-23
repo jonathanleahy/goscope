@@ -1,0 +1,40 @@
+# Binaries
+/go-scope
+/cmd/go-scope/go-scope
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+coverage.txt
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/dist/
+/build/
+
+# Test outputs
+/tests/golden/*.actual.md
+/tests/golden/*.actual.html
+/tests/golden/*.actual.json

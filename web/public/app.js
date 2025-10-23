@@ -21,6 +21,9 @@ class GoScopeVisualizer {
             showExternal: true,
             showDocs: true,
             folderDepth: 'all',
+            codeBlockWidth: 400,
+            codeBlockMaxLines: 15,
+            codeBlockFontSize: 11,
         };
 
         this.init();
@@ -182,16 +185,17 @@ class GoScopeVisualizer {
 
         const g = this.svg.select('g');
 
-        // Create force simulation
+        // Create force simulation with larger spacing for code blocks
         this.simulation = d3.forceSimulation(this.nodes)
             .force('link', d3.forceLink(this.links)
                 .id(d => d.id)
-                .distance(d => 100 + (d.depth * 50)))
-            .force('charge', d3.forceManyBody().strength(-300))
+                .distance(d => 300)) // Increased distance for code blocks
+            .force('charge', d3.forceManyBody().strength(-1000)) // Stronger repulsion
             .force('center', d3.forceCenter(this.config.width / 2, this.config.height / 2))
-            .force('collision', d3.forceCollide().radius(this.config.nodeRadius + 10))
-            .force('x', d3.forceX(this.config.width / 2).strength(0.05))
-            .force('y', d3.forceY(this.config.height / 2).strength(0.05));
+            .force('collision', d3.forceCollide()
+                .radius(d => Math.max(d.width || 400, d.height || 200) / 2 + 50)) // Account for rectangle size
+            .force('x', d3.forceX(this.config.width / 2).strength(0.02))
+            .force('y', d3.forceY(this.config.height / 2).strength(0.02));
 
         // Create links
         const link = g.append('g')
@@ -219,22 +223,44 @@ class GoScopeVisualizer {
             .call(this.drag(this.simulation))
             .on('click', (event, d) => this.showNodeDetails(d));
 
-        // Add circles
-        node.append('circle')
-            .attr('r', d => d.isTarget ? this.config.nodeRadius * 1.5 : this.config.nodeRadius)
-            .attr('data-depth', d => d.depth);
+        // Add code block foreignObjects
+        const foreignObject = node.append('foreignObject')
+            .attr('width', this.config.codeBlockWidth)
+            .attr('height', d => {
+                const codeInfo = this.prepareCodeForNode(d);
+                d.codeInfo = codeInfo; // Store for later use
+                const lineHeight = this.config.codeBlockFontSize * 1.5;
+                const headerHeight = 30;
+                const footerHeight = codeInfo.totalLines > codeInfo.lines ? 20 : 0;
+                return headerHeight + (codeInfo.lines * lineHeight) + footerHeight + 20;
+            })
+            .attr('x', d => -this.config.codeBlockWidth / 2)
+            .attr('y', d => -d.codeInfo.lines * this.config.codeBlockFontSize * 1.5 / 2 - 15);
 
-        // Add labels
-        node.append('text')
-            .text(d => d.name)
-            .attr('dy', d => d.isTarget ? 40 : 30)
-            .style('display', this.config.showLabels ? 'block' : 'none')
-            .style('font-size', d => d.isTarget ? '14px' : '12px')
-            .style('font-weight', d => d.isTarget ? 'bold' : 'normal');
+        // Add HTML content
+        foreignObject.append('xhtml:div')
+            .attr('class', d => {
+                let classes = 'code-node';
+                if (d.isTarget) classes += ' target';
+                if (d.external) classes += ' external';
+                return classes;
+            })
+            .html(d => d.codeInfo.html);
 
-        // Add tooltips
-        node.append('title')
-            .text(d => `${d.name}\n${d.kind} in ${d.package || 'external'}`);
+        // Store dimensions for collision detection
+        node.each(d => {
+            d.width = this.config.codeBlockWidth;
+            d.height = d.codeInfo.lines * this.config.codeBlockFontSize * 1.5 + 50;
+        });
+
+        // Apply Prism syntax highlighting to all code blocks
+        setTimeout(() => {
+            if (typeof Prism !== 'undefined') {
+                document.querySelectorAll('.code-node-code code').forEach(block => {
+                    Prism.highlightElement(block);
+                });
+            }
+        }, 100);
 
         // Update positions on simulation tick
         this.simulation.on('tick', () => {
@@ -386,6 +412,62 @@ class GoScopeVisualizer {
         const nodeSteps = nodeDepth - commonLength;
 
         return targetSteps + nodeSteps;
+    }
+
+    // Prepare code for display in graph nodes
+    prepareCodeForNode(node) {
+        if (!node.symbols || node.symbols.length === 0) {
+            return { html: '<div class="empty-code">No code available</div>', lines: 1 };
+        }
+
+        // Combine all symbol code from this file
+        let allCode = '';
+        let symbolMap = []; // Track which lines belong to which symbol
+
+        node.symbols.forEach((symbol, idx) => {
+            if (symbol.code) {
+                const lines = symbol.code.split('\n');
+                const startLine = allCode.split('\n').length;
+
+                lines.forEach((line, lineIdx) => {
+                    symbolMap.push({
+                        symbolIdx: idx,
+                        symbolName: symbol.name,
+                        lineInSymbol: lineIdx,
+                        globalLine: startLine + lineIdx
+                    });
+                });
+
+                allCode += symbol.code + '\n\n';
+            }
+        });
+
+        // Truncate if too long
+        const lines = allCode.split('\n');
+        const maxLines = this.config.codeBlockMaxLines;
+        let truncated = false;
+        let displayLines = lines;
+
+        if (lines.length > maxLines) {
+            displayLines = lines.slice(0, maxLines);
+            truncated = true;
+        }
+
+        // Escape HTML
+        const escaped = displayLines.map(l => this.escapeHtml(l)).join('\n');
+
+        const html = `<div class="code-node-content">
+            <div class="code-node-header">${node.name}</div>
+            <pre class="code-node-code language-go"><code class="language-go">${escaped}</code></pre>
+            ${truncated ? '<div class="code-node-truncated">... +' + (lines.length - maxLines) + ' more lines</div>' : ''}
+        </div>`;
+
+        return {
+            html,
+            lines: displayLines.length,
+            symbolMap,
+            totalLines: lines.length
+        };
     }
 
     showNodeDetails(node, fromHistory = false) {

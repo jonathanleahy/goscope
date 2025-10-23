@@ -585,3 +585,81 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* Code Block Nodes in Graph */
+.code-node {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s;
+}
+
+.code-node:hover {
+    border-color: var(--primary);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    transform: scale(1.02);
+}
+
+.code-node.target {
+    border-color: var(--success);
+    border-width: 3px;
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+}
+
+.code-node.external {
+    border-color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.code-node-header {
+    background: var(--primary);
+    color: white;
+    padding: 8px 12px;
+    font-weight: bold;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.code-node.target .code-node-header {
+    background: var(--success);
+}
+
+.code-node.external .code-node-header {
+    background: var(--text-muted);
+}
+
+.code-node-code {
+    margin: 0;
+    padding: 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    overflow: hidden;
+    white-space: pre;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.code-node-code code {
+    font-family: inherit;
+}
+
+.code-node-truncated {
+    background: var(--background);
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    border-top: 1px solid var(--border);
+}
+
+.empty-code {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+}

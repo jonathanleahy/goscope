@@ -40,6 +40,7 @@ class GoScopeVisualizer {
         document.getElementById('zoom-out').addEventListener('click', () => this.zoomOut());
         document.getElementById('reset-view').addEventListener('click', () => this.resetView());
         document.getElementById('toggle-labels').addEventListener('click', () => this.toggleLabels());
+        document.getElementById('fullscreen').addEventListener('click', () => this.toggleFullscreen());
         document.getElementById('show-external').addEventListener('change', (e) => this.toggleExternal(e.target.checked));
         document.getElementById('show-docs').addEventListener('change', (e) => {
             this.config.showDocs = e.target.checked;
@@ -1247,6 +1248,30 @@ class GoScopeVisualizer {
             this.zoom.transform,
             d3.zoomIdentity.translate(0, 0).scale(1)
         );
+    }
+
+    toggleFullscreen() {
+        const graphPanel = document.querySelector('.graph-panel');
+
+        if (!document.fullscreenElement) {
+            // Enter fullscreen
+            if (graphPanel.requestFullscreen) {
+                graphPanel.requestFullscreen();
+            } else if (graphPanel.webkitRequestFullscreen) { // Safari
+                graphPanel.webkitRequestFullscreen();
+            } else if (graphPanel.msRequestFullscreen) { // IE11
+                graphPanel.msRequestFullscreen();
+            }
+        } else {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { // Safari
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { // IE11
+                document.msExitFullscreen();
+            }
+        }
     }
 
     toggleLabels() {

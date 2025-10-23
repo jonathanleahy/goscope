@@ -177,6 +177,20 @@ body {
     min-width: 300px;
 }
 
+.graph-panel:fullscreen {
+    background: var(--surface);
+    padding: 1rem;
+}
+
+.graph-panel:fullscreen #graph-container {
+    width: 100vw;
+    height: 100vh;
+}
+
+.graph-panel:fullscreen .graph-info {
+    z-index: 1000;
+}
+
 .folder-panel {
     flex: 0 0 300px;
     min-width: 250px;

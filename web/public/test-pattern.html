@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pattern Test</title>
+</head>
+<body>
+    <h1>Testing Pattern Matching</h1>
+    <pre id="output"></pre>
+
+    <script>
+        const testCases = [
+            'AccountSearchResponse',
+            'presenter.AccountSearchResponse',
+            '*presenter.AccountSearchResponse',
+            '(*presenter.AccountSearchResponse, error)',
+            'var response presenter.AccountSearchResponse'
+        ];
+
+        const symbolName = 'AccountSearchResponse';
+        const escaped = symbolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Current pattern
+        const pattern = new RegExp(`(^|[^\\w.])([\\w*]*\\.)?\\b(${escaped})\\b`, 'g');
+
+        let output = 'Symbol to find: ' + symbolName + '\n\n';
+        output += 'Pattern: ' + pattern.source + '\n\n';
+        output += 'Test Cases:\n';
+        output += '='.repeat(50) + '\n';
+
+        testCases.forEach(test => {
+            const matches = [...test.matchAll(pattern)];
+            output += `\nInput: "${test}"\n`;
+            output += `Matches: ${matches.length}\n`;
+            matches.forEach((m, i) => {
+                output += `  Match ${i+1}: full="${m[0]}", prefix="${m[1]}", pkg="${m[2]||''}", symbol="${m[3]}"\n`;
+            });
+        });
+
+        document.getElementById('output').textContent = output;
+    </script>
+</body>
+</html>

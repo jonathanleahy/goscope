@@ -63,9 +63,14 @@ class GoScopeVisualizer {
     }
 
     initResizer() {
-        const handle = document.getElementById('resize-handle');
+        const handle = document.getElementById('code-resize-handle');
         const codePanel = document.getElementById('code-panel');
         const mainContent = document.querySelector('.main-content');
+
+        if (!handle || !codePanel || !mainContent) {
+            console.warn('Resize elements not found');
+            return;
+        }
 
         let isResizing = false;
 
@@ -119,6 +124,11 @@ class GoScopeVisualizer {
         const handle = document.getElementById('folder-resize-handle');
         const folderPanel = document.getElementById('folder-panel');
         const mainContent = document.querySelector('.main-content');
+
+        if (!handle || !folderPanel || !mainContent) {
+            console.warn('Folder resize elements not found');
+            return;
+        }
 
         let isResizing = false;
 
@@ -430,6 +440,8 @@ class GoScopeVisualizer {
     }
 
     updateFolderTreeUI() {
+        if (!this.data || !this.data.nodes) return;
+
         // Update visibility toggle buttons
         document.querySelectorAll('.file-item').forEach(item => {
             const path = item.dataset.path;

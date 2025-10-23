@@ -27,23 +27,26 @@ type Options struct {
 
 // Symbol represents a Go symbol (function, type, var, etc.)
 type Symbol struct {
-	Package  string // Full package path
-	Name     string // Symbol name
-	Kind     string // "func", "method", "type", "var", "const", "interface"
-	Receiver string // For methods: receiver type
-	File     string // Source file path
-	Line     int    // Start line
-	EndLine  int    // End line
-	Column   int    // Start column
-	Code     string // Source code
-	Doc      string // Documentation comment
-	Exported bool   // Whether symbol is exported
+	Package        string   // Full package path
+	Name           string   // Symbol name
+	Kind           string   // "func", "method", "type", "var", "const", "interface", "struct"
+	Receiver       string   // For methods: receiver type
+	File           string   // Source file path
+	Line           int      // Start line
+	EndLine        int      // End line
+	Column         int      // Start column
+	Code           string   // Source code
+	Doc            string   // Documentation comment
+	Exported       bool     // Whether symbol is exported
+	Implements     []string // For structs: interfaces they implement
+	InterfaceType  string   // For constructors: interface type returned
+	Implementation string   // For constructors: concrete type instantiated
 }
 
 // Reference represents a dependency
 type Reference struct {
 	Symbol       Symbol // Referenced symbol
-	Reason       string // "direct-call", "type-reference", "field-access", etc.
+	Reason       string // "direct-call", "type-reference", "field-access", "interface-contract", "implements-interface", "returns-interface", "di-binding", "requires-dep"
 	Depth        int    // 0 = target, 1 = direct dep, etc.
 	External     bool   // True if from different module
 	Stub         bool   // True if only signature included
@@ -78,15 +81,35 @@ type GitBlame struct {
 	Message string    // Commit message
 }
 
+// InterfaceMapping represents an interface-to-implementation relationship
+type InterfaceMapping struct {
+	Interface       Symbol   // The interface definition
+	Implementations []Symbol // Concrete types implementing the interface
+	Constructor     *Symbol  // Constructor function (if found)
+	DIFramework     string   // "wire", "fx", "manual", or empty
+}
+
+// DIBinding represents a dependency injection binding
+type DIBinding struct {
+	Provider     Symbol   // Provider function (e.g., NewAccountsService)
+	Product      Symbol   // What it provides (interface or concrete type)
+	Dependencies []Symbol // What it requires (constructor parameters)
+	Framework    string   // "wire", "fx", "manual"
+	Scope        string   // "singleton", "transient", "request", etc.
+}
+
 // Extract represents the extraction result
 type Extract struct {
-	Target     Symbol      // The requested symbol
-	References []Reference // Included dependencies
-	External   []string    // External package references (pkg.Symbol format)
-	Callers    []Caller    // What calls this symbol
-	Metrics    *Metrics    // Optional metrics
-	GitHistory []GitBlame  // Optional git history
-	Graph      string      // Dependency graph (mermaid or text format)
+	Target             Symbol             // The requested symbol
+	References         []Reference        // Included dependencies
+	External           []string           // External package references (pkg.Symbol format)
+	Callers            []Caller           // What calls this symbol
+	Metrics            *Metrics           // Optional metrics
+	GitHistory         []GitBlame         // Optional git history
+	Graph              string             // Dependency graph (mermaid or text format)
+	InterfaceMappings  []InterfaceMapping // Interface→Implementation mappings
+	DIBindings         []DIBinding        // Dependency injection bindings
+	DetectedDIFramework string            // "wire", "fx", "manual", or "none"
 }
 
 // Result is the final output

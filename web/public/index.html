@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Scope Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🔍 Go Scope Visualizer</h1>
+            <p class="subtitle">Interactive dependency graph explorer</p>
+        </header>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="file-input" class="btn btn-primary">
+                    📁 Load Extract JSON
+                    <input type="file" id="file-input" accept=".json" style="display: none;">
+                </label>
+                <span id="file-name" class="file-name"></span>
+            </div>
+
+            <div class="control-group">
+                <button id="zoom-in" class="btn btn-icon" title="Zoom In">➕</button>
+                <button id="zoom-out" class="btn btn-icon" title="Zoom Out">➖</button>
+                <button id="reset-view" class="btn btn-icon" title="Reset View">🎯</button>
+                <button id="toggle-labels" class="btn btn-icon" title="Toggle Labels">🏷️</button>
+            </div>
+
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="show-external" checked> Show External
+                </label>
+                <label>
+                    <input type="checkbox" id="show-docs" checked> Show Docs
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label for="folder-depth">📁 Folder Distance:</label>
+                <select id="folder-depth" class="depth-select">
+                    <option value="all">All Files</option>
+                    <option value="0">0 - Same Folder Only</option>
+                    <option value="1">≤1 - Up to 1 Away</option>
+                    <option value="2">≤2 - Up to 2 Away</option>
+                    <option value="3">≤3 - Up to 3 Away</option>
+                    <option value="4">≤4 - Up to 4 Away</option>
+                    <option value="5">≤5 - Up to 5 Away</option>
+                    <option value="6">≤6 - Up to 6 Away</option>
+                    <option value="7">≤7 - Up to 7 Away</option>
+                    <option value="8">≤8 - Up to 8 Away</option>
+                    <option value="9">≤9 - Up to 9 Away</option>
+                    <option value="10">≤10 - Up to 10 Away</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel: Graph Visualization -->
+            <div class="panel graph-panel">
+                <div id="graph-container"></div>
+                <div class="graph-info">
+                    <div id="legend" class="legend">
+                        <h3>Legend</h3>
+                        <div class="legend-item">
+                            <span class="node-icon target">●</span> Target Symbol
+                        </div>
+                        <div class="legend-item">
+                            <span class="node-icon internal">●</span> Internal Symbol
+                        </div>
+                        <div class="legend-item">
+                            <span class="node-icon external">●</span> External Symbol
+                        </div>
+                        <div class="legend-item">
+                            <span class="edge-line">—</span> Direct Call
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Code Display -->
+            <div class="panel code-panel" id="code-panel">
+                <div class="resize-handle" id="resize-handle"></div>
+                <div class="panel-header">
+                    <div class="nav-controls">
+                        <button id="nav-back" class="btn btn-icon" title="Go back" disabled>◀</button>
+                        <button id="nav-forward" class="btn btn-icon" title="Go forward" disabled>▶</button>
+                        <div id="breadcrumb" class="breadcrumb"></div>
+                    </div>
+                    <h2 id="code-title">Select a node to view code</h2>
+                    <button id="close-code" class="btn-close">✕</button>
+                </div>
+                <div id="code-content" class="code-content">
+                    <div class="empty-state">
+                        👈 Click on a node in the graph to view its code and details
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat">
+                <span class="stat-label">Total Nodes:</span>
+                <span id="stat-nodes" class="stat-value">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Total Edges:</span>
+                <span id="stat-edges" class="stat-value">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Max Depth:</span>
+                <span id="stat-depth" class="stat-value">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">External Refs:</span>
+                <span id="stat-external" class="stat-value">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
+    <script src="app.js?v=17"></script>
+    <script src="app-simple.js?v=17"></script>
+    <script>
+        // Store reference for monkey patch
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                window.goScopeViz = document.goScopeViz;
+            }, 100);
+        });
+    </script>
+</body>
+</html>

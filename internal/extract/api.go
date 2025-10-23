@@ -25,8 +25,10 @@ func ExtractAndFormat(ctx context.Context, target types.Target, opts types.Optio
 			return nil, fmt.Errorf("failed to format markdown: %w", err)
 		}
 	case "json":
-		// TODO: Implement JSON formatter
-		result.Rendered = "JSON formatting not yet implemented"
+		result.Rendered, err = format.ToJSON(result.Extract, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to format json: %w", err)
+		}
 	case "html":
 		// TODO: Implement HTML formatter
 		result.Rendered = "HTML formatting not yet implemented"

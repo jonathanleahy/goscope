@@ -1,39 +1,84 @@
 # Go Scope Extractor
 
-A tool to extract Go code with its dependencies for review and understanding. Unlike traditional code navigation tools that focus on compilation, this tool is designed specifically for **code review and comprehension**.
+**Architecture-aware Go code extraction and visualization tool** for understanding dependencies, scope, and hexagonal patterns.
+
+Extract Go code with its dependencies, discover interface→implementation mappings, detect DI frameworks, and visualize your architecture.
 
 ## Key Features
 
-- **Review-Focused**: Extracts readable code with functional context, not necessarily compilable code
-- **Depth-Limited Extraction**: Control how deep to traverse dependencies (0=target only, 1=direct deps, 2=transitive deps, etc.)
-- **Multiple Output Formats**: Markdown (default), JSON, HTML
-- **Smart Dependency Resolution**: Uses BFS traversal to gather dependencies systematically
-- **Documentation Included**: Preserves documentation comments
-- **External Reference Tracking**: Lists external packages used
+### Phase 1 & 2 (Core + Visualizer)
+- **Review-Focused**: Extracts readable code with functional context
+- **Depth-Limited Extraction**: Control dependency traversal depth (0=target only, 1=direct, 2=transitive, etc.)
+- **Multiple Output Formats**: Markdown, JSON, HTML
+- **Smart Dependency Resolution**: BFS traversal for systematic gathering
+- **Interactive Web Visualizer**: D3.js force-directed graph with zoom, drag, and code viewing
+
+### Phase 3 (Architecture Analysis) 🆕
+- **Interface Detection**: Automatically discovers interfaces implemented by structs
+- **DI Framework Detection**: Recognizes Wire, Fx, and manual DI patterns
+- **Hexagonal Architecture**: Visual identification of ports, adapters, and factories
+- **Semantic Visualization**: Color-coded nodes for interfaces (green), implementations (purple), constructors (orange)
 
 ## Installation
 
+### CLI Tool
+
 ```bash
+# Build the extraction tool
 go build -o bin/go-scope ./cmd/go-scope
+
+# Or install globally
+go install ./cmd/go-scope
+```
+
+### Visualizer Server
+
+```bash
+# Build the web server
+go build -o bin/serve ./cmd/serve
+
+# Or use any static file server
+python3 -m http.server 8080 -d web/public
+npx http-server web/public -p 8080
 ```
 
 ## Usage
 
+### CLI Extraction
+
 ```bash
-# Extract a function with direct dependencies
+# Extract a function with direct dependencies (Markdown)
 go-scope -file=pkg/math/add.go -line=42 -depth=1
+
+# Extract as JSON for visualizer
+go-scope -file=pkg/math/add.go -line=42 -depth=2 -format=json -output=extract.json
 
 # Extract target only (no dependencies)
 go-scope -file=pkg/math/add.go -line=42 -depth=0
-
-# Extract with dependencies of dependencies (depth 2)
-go-scope -file=pkg/math/add.go -line=42 -depth=2
 
 # Save output to file
 go-scope -file=pkg/math/add.go -line=42 -output=extract.md
 
 # Verbose mode
 go-scope -file=pkg/math/add.go -line=42 -verbose
+```
+
+### Web Visualizer
+
+```bash
+# 1. Generate JSON extract
+cd your-go-project
+go-scope -file=pkg/math/add.go -line=42 -depth=2 -format=json -output=extract.json
+
+# 2. Start visualizer server
+./bin/serve web/public
+# Or: python3 -m http.server 8080 -d web/public
+
+# 3. Open http://localhost:8080 in browser
+
+# 4. Click "Load Extract JSON" and select extract.json
+
+# 5. Explore interactively!
 ```
 
 ## Command Line Options
@@ -181,16 +226,26 @@ Test coverage:
    - High test coverage (75-78%)
    - RED-GREEN-REFACTOR cycle
 
-## Future Enhancements (Phase 2)
+## Future Enhancements
 
-- [ ] Interactive web visualizer (see `docs/PHASE_2_VISUALIZER.md`)
-- [ ] JSON output format
+Phase 2 ✅ Complete:
+- [x] Interactive web visualizer
+- [x] JSON output format
+- [x] Force-directed graph layout
+- [x] Interactive exploration
+
+Phase 3 Planned:
 - [ ] HTML output format
 - [ ] Caller analysis (reverse dependencies)
 - [ ] Complexity metrics (cyclomatic complexity)
 - [ ] Git blame integration
 - [ ] Test function inclusion
 - [ ] Context lines around code
+- [ ] Export visualizations as PNG/SVG
+- [ ] Minimap for large graphs
+- [ ] Search and filter nodes
+- [ ] Path highlighting
+- [ ] Dark mode
 
 ## Documentation
 
@@ -215,14 +270,21 @@ This project was built using Test-Driven Development. When contributing:
 ## Status
 
 ✅ **Phase 1 Complete** - Core extraction functionality working with CLI
+✅ **Phase 2 Complete** - Interactive web visualizer
 
 Current capabilities:
 - ✅ Symbol location at file:line:column
 - ✅ Depth-limited BFS dependency collection
 - ✅ Markdown formatting
+- ✅ JSON formatting
 - ✅ CLI tool
+- ✅ Interactive web visualizer with D3.js
+- ✅ Force-directed graph layout
+- ✅ Zoom, pan, and drag controls
+- ✅ Code and documentation viewer
 - ✅ External reference tracking
 - ✅ Documentation preservation
 - ✅ High test coverage (75-78%)
+- ✅ Web server for visualizer
 
-Next: Phase 2 - Interactive visualizer and additional output formats
+Next: Phase 3 - Advanced features (metrics, callers, git blame)

@@ -7,6 +7,8 @@ class GoScopeVisualizer {
         this.nodes = [];
         this.links = [];
         this.zoom = null;
+        this.hiddenFiles = new Set(); // Track hidden files by path
+        this.folderTree = null; // Store folder hierarchy
 
         // Navigation history
         this.history = [];
@@ -22,7 +24,7 @@ class GoScopeVisualizer {
             showDocs: true,
             folderDepth: 'all',
             codeBlockWidth: 400,
-            codeBlockMaxLines: 15,
+            codeBlockMaxLines: 999, // Show all code (no truncation)
             codeBlockFontSize: 11,
         };
 
@@ -47,8 +49,14 @@ class GoScopeVisualizer {
         document.getElementById('nav-back').addEventListener('click', () => this.navigateBack());
         document.getElementById('nav-forward').addEventListener('click', () => this.navigateForward());
 
-        // Set up resizable splitter
+        // Folder tree controls
+        document.getElementById('expand-all').addEventListener('click', () => this.expandAllFolders());
+        document.getElementById('collapse-all').addEventListener('click', () => this.collapseAllFolders());
+        document.getElementById('show-all-files').addEventListener('click', () => this.showAllFiles());
+
+        // Set up resizable splitters
         this.initResizer();
+        this.initFolderResizer();
 
         // Initialize empty graph
         this.initializeGraph();
@@ -103,6 +111,60 @@ class GoScopeVisualizer {
                 // Save width to localStorage
                 const width = codePanel.style.flexBasis;
                 localStorage.setItem('codePanelWidth', width);
+            }
+        });
+    }
+
+    initFolderResizer() {
+        const handle = document.getElementById('folder-resize-handle');
+        const folderPanel = document.getElementById('folder-panel');
+        const mainContent = document.querySelector('.main-content');
+
+        let isResizing = false;
+
+        // Restore saved width from localStorage
+        const savedWidth = localStorage.getItem('folderPanelWidth');
+        if (savedWidth) {
+            folderPanel.style.flexBasis = savedWidth;
+            folderPanel.style.flexGrow = '0';
+            folderPanel.style.flexShrink = '0';
+        }
+
+        handle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            handle.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const containerRect = mainContent.getBoundingClientRect();
+            const folderRect = folderPanel.getBoundingClientRect();
+            const newWidth = e.clientX - folderRect.left;
+
+            // Min 250px, max 500px
+            const minWidth = 250;
+            const maxWidth = 500;
+
+            if (newWidth >= minWidth && newWidth <= maxWidth) {
+                folderPanel.style.flexBasis = `${newWidth}px`;
+                folderPanel.style.flexGrow = '0';
+                folderPanel.style.flexShrink = '0';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                handle.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+
+                // Save width to localStorage
+                const width = folderPanel.style.flexBasis;
+                localStorage.setItem('folderPanelWidth', width);
             }
         });
     }
@@ -168,10 +230,268 @@ class GoScopeVisualizer {
 
             this.renderGraph();
             this.updateStats();
+            this.buildFolderTree();
         } catch (error) {
             console.error('Error loading file:', error);
             alert('Error loading JSON file: ' + error.message + '\n\nPlease ensure it\'s a valid go-scope JSON extract.');
         }
+    }
+
+    buildFolderTree() {
+        if (!this.data || !this.data.nodes) return;
+
+        // Build folder hierarchy from file paths
+        const root = { name: 'root', children: {}, files: [], path: '' };
+
+        this.data.nodes.forEach(node => {
+            if (!node.file) return;
+
+            const parts = node.file.split('/').filter(p => p);
+            let current = root;
+            let currentPath = '';
+
+            // Build folder structure
+            for (let i = 0; i < parts.length - 1; i++) {
+                const part = parts[i];
+                currentPath += (currentPath ? '/' : '') + part;
+
+                if (!current.children[part]) {
+                    current.children[part] = {
+                        name: part,
+                        children: {},
+                        files: [],
+                        path: currentPath
+                    };
+                }
+                current = current.children[part];
+            }
+
+            // Add file to current folder
+            const fileName = parts[parts.length - 1];
+            current.files.push({
+                name: fileName,
+                path: node.file,
+                node: node
+            });
+        });
+
+        this.folderTree = root;
+        this.renderFolderTree();
+    }
+
+    renderFolderTree() {
+        const container = document.getElementById('folder-tree');
+        container.innerHTML = '';
+
+        const renderFolder = (folder, parentElement, depth = 0) => {
+            // Render subfolders
+            Object.keys(folder.children).sort().forEach(folderName => {
+                const subfolder = folder.children[folderName];
+                const folderItem = document.createElement('div');
+                folderItem.className = 'folder-item';
+                folderItem.dataset.path = subfolder.path;
+
+                const folderHeader = document.createElement('div');
+                folderHeader.className = 'folder-header';
+                folderHeader.style.display = 'flex';
+                folderHeader.style.alignItems = 'center';
+                folderHeader.style.gap = '0.5rem';
+                folderHeader.style.width = '100%';
+
+                // Folder icon (collapsible)
+                const icon = document.createElement('span');
+                icon.className = 'folder-icon';
+                icon.textContent = '📁';
+                icon.style.cursor = 'pointer';
+                folderHeader.appendChild(icon);
+
+                // Folder name
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'folder-name';
+                nameSpan.textContent = folderName;
+                nameSpan.title = subfolder.path;
+                folderHeader.appendChild(nameSpan);
+
+                // Count all files in folder recursively
+                const countFiles = (f) => {
+                    let count = f.files.length;
+                    Object.values(f.children).forEach(child => count += countFiles(child));
+                    return count;
+                };
+                const fileCount = countFiles(subfolder);
+
+                const countSpan = document.createElement('span');
+                countSpan.className = 'file-count';
+                countSpan.textContent = `(${fileCount})`;
+                folderHeader.appendChild(countSpan);
+
+                // Visibility toggle
+                const toggle = document.createElement('button');
+                toggle.className = 'visibility-toggle';
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide folder';
+                toggle.onclick = (e) => {
+                    e.stopPropagation();
+                    this.toggleFolderVisibility(subfolder.path);
+                };
+                folderHeader.appendChild(toggle);
+
+                folderItem.appendChild(folderHeader);
+
+                // Folder children container
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'folder-children';
+                folderItem.appendChild(childrenContainer);
+
+                // Toggle folder collapse
+                icon.onclick = () => {
+                    folderItem.classList.toggle('collapsed');
+                    icon.textContent = folderItem.classList.contains('collapsed') ? '📁' : '📂';
+                };
+
+                parentElement.appendChild(folderItem);
+
+                // Render children recursively
+                renderFolder(subfolder, childrenContainer, depth + 1);
+            });
+
+            // Render files
+            folder.files.sort((a, b) => a.name.localeCompare(b.name)).forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.dataset.path = file.path;
+
+                const fileIcon = document.createElement('span');
+                fileIcon.className = 'file-icon';
+                fileIcon.textContent = '📄';
+                fileItem.appendChild(fileIcon);
+
+                const fileName = document.createElement('span');
+                fileName.className = 'file-name';
+                fileName.textContent = file.name;
+                fileName.title = file.path;
+                fileItem.appendChild(fileName);
+
+                // Visibility toggle
+                const toggle = document.createElement('button');
+                toggle.className = 'visibility-toggle';
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide file';
+                toggle.onclick = (e) => {
+                    e.stopPropagation();
+                    this.toggleFileVisibility(file.path);
+                };
+                fileItem.appendChild(toggle);
+
+                // Click to show file details
+                fileItem.onclick = () => {
+                    const node = this.nodes.find(n => n.file === file.path && n.kind === 'file');
+                    if (node) {
+                        this.showNodeDetails(node);
+                        this.highlightNode(node);
+                    }
+                };
+
+                parentElement.appendChild(fileItem);
+            });
+        };
+
+        renderFolder(this.folderTree, container);
+    }
+
+    toggleFileVisibility(filePath) {
+        if (this.hiddenFiles.has(filePath)) {
+            this.hiddenFiles.delete(filePath);
+        } else {
+            this.hiddenFiles.add(filePath);
+        }
+        this.updateFolderTreeUI();
+        this.renderGraph();
+    }
+
+    toggleFolderVisibility(folderPath) {
+        // Toggle all files in folder and subfolders
+        const affectedFiles = this.data.nodes
+            .filter(n => n.file && n.file.startsWith(folderPath + '/'))
+            .map(n => n.file);
+
+        const allHidden = affectedFiles.every(f => this.hiddenFiles.has(f));
+
+        if (allHidden) {
+            // Show all
+            affectedFiles.forEach(f => this.hiddenFiles.delete(f));
+        } else {
+            // Hide all
+            affectedFiles.forEach(f => this.hiddenFiles.add(f));
+        }
+
+        this.updateFolderTreeUI();
+        this.renderGraph();
+    }
+
+    updateFolderTreeUI() {
+        // Update visibility toggle buttons
+        document.querySelectorAll('.file-item').forEach(item => {
+            const path = item.dataset.path;
+            const toggle = item.querySelector('.visibility-toggle');
+            if (this.hiddenFiles.has(path)) {
+                item.classList.add('hidden');
+                toggle.classList.add('hidden');
+                toggle.textContent = '🚫';
+                toggle.title = 'Show file';
+            } else {
+                item.classList.remove('hidden');
+                toggle.classList.remove('hidden');
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide file';
+            }
+        });
+
+        document.querySelectorAll('.folder-item').forEach(item => {
+            const path = item.dataset.path;
+            const toggle = item.querySelector('.visibility-toggle');
+
+            // Check if all files in folder are hidden
+            const affectedFiles = this.data.nodes
+                .filter(n => n.file && n.file.startsWith(path + '/'))
+                .map(n => n.file);
+
+            const allHidden = affectedFiles.length > 0 && affectedFiles.every(f => this.hiddenFiles.has(f));
+
+            if (allHidden) {
+                item.classList.add('hidden');
+                toggle.classList.add('hidden');
+                toggle.textContent = '🚫';
+                toggle.title = 'Show folder';
+            } else {
+                item.classList.remove('hidden');
+                toggle.classList.remove('hidden');
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide folder';
+            }
+        });
+    }
+
+    expandAllFolders() {
+        document.querySelectorAll('.folder-item').forEach(item => {
+            item.classList.remove('collapsed');
+            const icon = item.querySelector('.folder-icon');
+            if (icon) icon.textContent = '📂';
+        });
+    }
+
+    collapseAllFolders() {
+        document.querySelectorAll('.folder-item').forEach(item => {
+            item.classList.add('collapsed');
+            const icon = item.querySelector('.folder-icon');
+            if (icon) icon.textContent = '📁';
+        });
+    }
+
+    showAllFiles() {
+        this.hiddenFiles.clear();
+        this.updateFolderTreeUI();
+        this.renderGraph();
     }
 
     renderGraph() {
@@ -253,6 +573,21 @@ class GoScopeVisualizer {
             d.height = d.codeInfo.lines * this.config.codeBlockFontSize * 1.5 + 50;
         });
 
+        // Update collision force with actual node dimensions
+        this.simulation.force('collision', d3.forceCollide()
+            .radius(d => {
+                // Use diagonal of rectangle + padding for collision
+                const width = d.width || 400;
+                const height = d.height || 200;
+                const diagonal = Math.sqrt(width * width + height * height) / 2;
+                return diagonal + 30; // Add 30px padding
+            })
+            .strength(0.8) // Strong collision avoidance
+            .iterations(3)); // Multiple iterations for better separation
+
+        // Restart simulation to apply new collision
+        this.simulation.alpha(1).restart();
+
         // Apply Prism syntax highlighting to all code blocks
         setTimeout(() => {
             if (typeof Prism !== 'undefined') {
@@ -315,6 +650,9 @@ class GoScopeVisualizer {
 
         // Convert map to array
         this.nodes = Array.from(fileMap.values());
+
+        // Filter hidden files
+        this.nodes = this.nodes.filter(n => !this.hiddenFiles.has(n.file));
 
         // Filter external nodes if needed
         if (!this.config.showExternal) {

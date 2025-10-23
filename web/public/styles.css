@@ -177,6 +177,13 @@ body {
     min-width: 300px;
 }
 
+.folder-panel {
+    flex: 0 0 300px;
+    min-width: 250px;
+    max-width: 500px;
+    position: relative;
+}
+
 .code-panel {
     flex: 1;
     min-width: 300px;
@@ -662,4 +669,99 @@ body {
     text-align: center;
     color: var(--text-muted);
     font-style: italic;
+}
+
+/* Folder Tree Panel */
+.folder-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.folder-controls {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.folder-item, .file-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.folder-item:hover, .file-item:hover {
+    background: rgba(0, 102, 204, 0.1);
+}
+
+.folder-item {
+    font-weight: 500;
+}
+
+.folder-item.collapsed > .folder-children {
+    display: none;
+}
+
+.folder-children {
+    margin-left: 1.25rem;
+    border-left: 1px solid var(--border);
+    padding-left: 0.5rem;
+}
+
+.folder-icon, .file-icon {
+    font-size: 0.9rem;
+    width: 1.2rem;
+    text-align: center;
+}
+
+.visibility-toggle {
+    margin-left: auto;
+    padding: 0.2rem 0.4rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.visibility-toggle:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.visibility-toggle.hidden {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+}
+
+.folder-name, .file-name {
+    flex: 1;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-item.hidden {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.folder-item.hidden > .folder-header {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.file-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: normal;
 }

@@ -7,6 +7,9 @@ class GoScopeVisualizer {
         this.nodes = [];
         this.links = [];
         this.zoom = null;
+        this.hiddenFiles = new Set(); // Track hidden files by path
+        this.folderTree = null; // Store folder hierarchy
+        this.detachedNodes = new Set(); // Track detached nodes by file path
 
         // Navigation history
         this.history = [];
@@ -21,6 +24,9 @@ class GoScopeVisualizer {
             showExternal: true,
             showDocs: true,
             folderDepth: 'all',
+            codeBlockWidth: 400,
+            codeBlockMaxLines: 999, // Show all code (no truncation)
+            codeBlockFontSize: 11,
         };
 
         this.init();
@@ -35,6 +41,7 @@ class GoScopeVisualizer {
         document.getElementById('zoom-out').addEventListener('click', () => this.zoomOut());
         document.getElementById('reset-view').addEventListener('click', () => this.resetView());
         document.getElementById('toggle-labels').addEventListener('click', () => this.toggleLabels());
+        document.getElementById('fullscreen').addEventListener('click', () => this.toggleFullscreen());
         document.getElementById('show-external').addEventListener('change', (e) => this.toggleExternal(e.target.checked));
         document.getElementById('show-docs').addEventListener('change', (e) => {
             this.config.showDocs = e.target.checked;
@@ -44,17 +51,28 @@ class GoScopeVisualizer {
         document.getElementById('nav-back').addEventListener('click', () => this.navigateBack());
         document.getElementById('nav-forward').addEventListener('click', () => this.navigateForward());
 
-        // Set up resizable splitter
+        // Folder tree controls
+        document.getElementById('expand-all').addEventListener('click', () => this.expandAllFolders());
+        document.getElementById('collapse-all').addEventListener('click', () => this.collapseAllFolders());
+        document.getElementById('show-all-files').addEventListener('click', () => this.showAllFiles());
+
+        // Set up resizable splitters
         this.initResizer();
+        this.initFolderResizer();
 
         // Initialize empty graph
         this.initializeGraph();
     }
 
     initResizer() {
-        const handle = document.getElementById('resize-handle');
+        const handle = document.getElementById('code-resize-handle');
         const codePanel = document.getElementById('code-panel');
         const mainContent = document.querySelector('.main-content');
+
+        if (!handle || !codePanel || !mainContent) {
+            console.warn('Resize elements not found');
+            return;
+        }
 
         let isResizing = false;
 
@@ -100,6 +118,65 @@ class GoScopeVisualizer {
                 // Save width to localStorage
                 const width = codePanel.style.flexBasis;
                 localStorage.setItem('codePanelWidth', width);
+            }
+        });
+    }
+
+    initFolderResizer() {
+        const handle = document.getElementById('folder-resize-handle');
+        const folderPanel = document.getElementById('folder-panel');
+        const mainContent = document.querySelector('.main-content');
+
+        if (!handle || !folderPanel || !mainContent) {
+            console.warn('Folder resize elements not found');
+            return;
+        }
+
+        let isResizing = false;
+
+        // Restore saved width from localStorage
+        const savedWidth = localStorage.getItem('folderPanelWidth');
+        if (savedWidth) {
+            folderPanel.style.flexBasis = savedWidth;
+            folderPanel.style.flexGrow = '0';
+            folderPanel.style.flexShrink = '0';
+        }
+
+        handle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            handle.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const containerRect = mainContent.getBoundingClientRect();
+            const folderRect = folderPanel.getBoundingClientRect();
+            const newWidth = e.clientX - folderRect.left;
+
+            // Min 250px, max 500px
+            const minWidth = 250;
+            const maxWidth = 500;
+
+            if (newWidth >= minWidth && newWidth <= maxWidth) {
+                folderPanel.style.flexBasis = `${newWidth}px`;
+                folderPanel.style.flexGrow = '0';
+                folderPanel.style.flexShrink = '0';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                handle.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+
+                // Save width to localStorage
+                const width = folderPanel.style.flexBasis;
+                localStorage.setItem('folderPanelWidth', width);
             }
         });
     }
@@ -165,10 +242,281 @@ class GoScopeVisualizer {
 
             this.renderGraph();
             this.updateStats();
+            this.buildFolderTree();
         } catch (error) {
             console.error('Error loading file:', error);
             alert('Error loading JSON file: ' + error.message + '\n\nPlease ensure it\'s a valid go-scope JSON extract.');
         }
+    }
+
+    buildFolderTree() {
+        if (!this.data || !this.data.nodes) return;
+
+        // Build folder hierarchy from file paths
+        const root = { name: 'root', children: {}, files: [], path: '' };
+
+        this.data.nodes.forEach(node => {
+            if (!node.file) return;
+
+            const parts = node.file.split('/').filter(p => p);
+            let current = root;
+            let currentPath = '';
+
+            // Build folder structure
+            for (let i = 0; i < parts.length - 1; i++) {
+                const part = parts[i];
+                currentPath += (currentPath ? '/' : '') + part;
+
+                if (!current.children[part]) {
+                    current.children[part] = {
+                        name: part,
+                        children: {},
+                        files: [],
+                        path: currentPath
+                    };
+                }
+                current = current.children[part];
+            }
+
+            // Add file to current folder
+            const fileName = parts[parts.length - 1];
+            current.files.push({
+                name: fileName,
+                path: node.file,
+                node: node
+            });
+        });
+
+        this.folderTree = root;
+        this.renderFolderTree();
+    }
+
+    renderFolderTree() {
+        const container = document.getElementById('folder-tree');
+        container.innerHTML = '';
+
+        const renderFolder = (folder, parentElement, depth = 0) => {
+            // Render subfolders
+            Object.keys(folder.children).sort().forEach(folderName => {
+                const subfolder = folder.children[folderName];
+                const folderItem = document.createElement('div');
+                folderItem.className = 'folder-item';
+                folderItem.dataset.path = subfolder.path;
+
+                const folderHeader = document.createElement('div');
+                folderHeader.className = 'folder-header';
+                folderHeader.style.display = 'flex';
+                folderHeader.style.alignItems = 'center';
+                folderHeader.style.gap = '0.5rem';
+                folderHeader.style.width = '100%';
+
+                // Folder icon (collapsible)
+                const icon = document.createElement('span');
+                icon.className = 'folder-icon';
+                icon.textContent = '📁';
+                icon.style.cursor = 'pointer';
+                folderHeader.appendChild(icon);
+
+                // Folder name
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'folder-name';
+                nameSpan.textContent = folderName;
+                nameSpan.title = subfolder.path;
+                folderHeader.appendChild(nameSpan);
+
+                // Count all files in folder recursively
+                const countFiles = (f) => {
+                    let count = f.files.length;
+                    Object.values(f.children).forEach(child => count += countFiles(child));
+                    return count;
+                };
+                const fileCount = countFiles(subfolder);
+
+                const countSpan = document.createElement('span');
+                countSpan.className = 'file-count';
+                countSpan.textContent = `(${fileCount})`;
+                folderHeader.appendChild(countSpan);
+
+                // Visibility toggle
+                const toggle = document.createElement('button');
+                toggle.className = 'visibility-toggle';
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide folder';
+                toggle.onclick = (e) => {
+                    e.stopPropagation();
+                    this.toggleFolderVisibility(subfolder.path);
+                };
+                folderHeader.appendChild(toggle);
+
+                folderItem.appendChild(folderHeader);
+
+                // Folder children container
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'folder-children';
+                folderItem.appendChild(childrenContainer);
+
+                // Toggle folder collapse
+                icon.onclick = () => {
+                    folderItem.classList.toggle('collapsed');
+                    icon.textContent = folderItem.classList.contains('collapsed') ? '📁' : '📂';
+                };
+
+                parentElement.appendChild(folderItem);
+
+                // Render children recursively
+                renderFolder(subfolder, childrenContainer, depth + 1);
+            });
+
+            // Render files
+            folder.files.sort((a, b) => a.name.localeCompare(b.name)).forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.dataset.path = file.path;
+
+                const fileIcon = document.createElement('span');
+                fileIcon.className = 'file-icon';
+                fileIcon.textContent = '📄';
+                fileItem.appendChild(fileIcon);
+
+                const fileName = document.createElement('span');
+                fileName.className = 'file-name';
+                fileName.textContent = file.name;
+                fileName.title = file.path;
+                fileItem.appendChild(fileName);
+
+                // Visibility toggle
+                const toggle = document.createElement('button');
+                toggle.className = 'visibility-toggle';
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide file';
+                toggle.onclick = (e) => {
+                    e.stopPropagation();
+                    this.toggleFileVisibility(file.path);
+                };
+                fileItem.appendChild(toggle);
+
+                // Click to show file details
+                fileItem.onclick = () => {
+                    const node = this.nodes.find(n => n.file === file.path && n.kind === 'file');
+                    if (node) {
+                        this.showNodeDetails(node);
+                        this.highlightNode(node);
+                    }
+                };
+
+                parentElement.appendChild(fileItem);
+            });
+        };
+
+        renderFolder(this.folderTree, container);
+    }
+
+    toggleFileVisibility(filePath) {
+        if (this.hiddenFiles.has(filePath)) {
+            this.hiddenFiles.delete(filePath);
+        } else {
+            this.hiddenFiles.add(filePath);
+        }
+        this.updateFolderTreeUI();
+        this.renderGraph();
+    }
+
+    toggleFolderVisibility(folderPath) {
+        // Toggle all files in folder and subfolders
+        const affectedFiles = this.data.nodes
+            .filter(n => n.file && n.file.startsWith(folderPath + '/'))
+            .map(n => n.file);
+
+        const allHidden = affectedFiles.every(f => this.hiddenFiles.has(f));
+
+        if (allHidden) {
+            // Show all
+            affectedFiles.forEach(f => this.hiddenFiles.delete(f));
+        } else {
+            // Hide all
+            affectedFiles.forEach(f => this.hiddenFiles.add(f));
+        }
+
+        this.updateFolderTreeUI();
+        this.renderGraph();
+    }
+
+    updateFolderTreeUI() {
+        if (!this.data || !this.data.nodes) return;
+
+        // Update visibility toggle buttons
+        document.querySelectorAll('.file-item').forEach(item => {
+            const path = item.dataset.path;
+            const toggle = item.querySelector('.visibility-toggle');
+            if (this.hiddenFiles.has(path)) {
+                item.classList.add('hidden');
+                toggle.classList.add('hidden');
+                toggle.textContent = '🚫';
+                toggle.title = 'Show file';
+            } else {
+                item.classList.remove('hidden');
+                toggle.classList.remove('hidden');
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide file';
+            }
+        });
+
+        document.querySelectorAll('.folder-item').forEach(item => {
+            const path = item.dataset.path;
+            const toggle = item.querySelector('.visibility-toggle');
+
+            // Check if all files in folder are hidden
+            const affectedFiles = this.data.nodes
+                .filter(n => n.file && n.file.startsWith(path + '/'))
+                .map(n => n.file);
+
+            const allHidden = affectedFiles.length > 0 && affectedFiles.every(f => this.hiddenFiles.has(f));
+
+            if (allHidden) {
+                item.classList.add('hidden');
+                toggle.classList.add('hidden');
+                toggle.textContent = '🚫';
+                toggle.title = 'Show folder';
+            } else {
+                item.classList.remove('hidden');
+                toggle.classList.remove('hidden');
+                toggle.textContent = '👁️';
+                toggle.title = 'Hide folder';
+            }
+        });
+    }
+
+    expandAllFolders() {
+        document.querySelectorAll('.folder-item').forEach(item => {
+            item.classList.remove('collapsed');
+            const icon = item.querySelector('.folder-icon');
+            if (icon) icon.textContent = '📂';
+        });
+    }
+
+    collapseAllFolders() {
+        document.querySelectorAll('.folder-item').forEach(item => {
+            item.classList.add('collapsed');
+            const icon = item.querySelector('.folder-icon');
+            if (icon) icon.textContent = '📁';
+        });
+    }
+
+    showAllFiles() {
+        this.hiddenFiles.clear();
+        this.updateFolderTreeUI();
+        this.renderGraph();
+    }
+
+    toggleDetach(filePath) {
+        if (this.detachedNodes.has(filePath)) {
+            // Reattach
+            this.detachedNodes.delete(filePath);
+        } else {
+            // Detach
+            this.detachedNodes.add(filePath);
+        }
+        this.renderGraph();
     }
 
     renderGraph() {
@@ -182,27 +530,19 @@ class GoScopeVisualizer {
 
         const g = this.svg.select('g');
 
-        // Create force simulation
+        // Create force simulation with larger spacing for code blocks
         this.simulation = d3.forceSimulation(this.nodes)
             .force('link', d3.forceLink(this.links)
                 .id(d => d.id)
-                .distance(d => 100 + (d.depth * 50)))
-            .force('charge', d3.forceManyBody().strength(-300))
+                .distance(d => 300)) // Increased distance for code blocks
+            .force('charge', d3.forceManyBody().strength(-1000)) // Stronger repulsion
             .force('center', d3.forceCenter(this.config.width / 2, this.config.height / 2))
-            .force('collision', d3.forceCollide().radius(this.config.nodeRadius + 10))
-            .force('x', d3.forceX(this.config.width / 2).strength(0.05))
-            .force('y', d3.forceY(this.config.height / 2).strength(0.05));
+            .force('collision', d3.forceCollide()
+                .radius(d => Math.max(d.width || 400, d.height || 200) / 2 + 50)) // Account for rectangle size
+            .force('x', d3.forceX(this.config.width / 2).strength(0.02))
+            .force('y', d3.forceY(this.config.height / 2).strength(0.02));
 
-        // Create links
-        const link = g.append('g')
-            .attr('class', 'links')
-            .selectAll('line')
-            .data(this.links)
-            .join('line')
-            .attr('class', 'link')
-            .attr('stroke-width', d => 1 + d.depth * 0.5);
-
-        // Create nodes
+        // Create nodes FIRST (so they render behind links)
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('g')
@@ -217,32 +557,141 @@ class GoScopeVisualizer {
                 return 'node internal';
             })
             .call(this.drag(this.simulation))
-            .on('click', (event, d) => this.showNodeDetails(d));
+            .on('click', (event, d) => {
+                // If detached, reattach on click
+                if (this.detachedNodes.has(d.file)) {
+                    this.toggleDetach(d.file);
+                } else {
+                    this.showNodeDetails(d);
+                }
+            });
 
-        // Add circles
-        node.append('circle')
-            .attr('r', d => d.isTarget ? this.config.nodeRadius * 1.5 : this.config.nodeRadius)
-            .attr('data-depth', d => d.depth);
+        // Add code block foreignObjects
+        const foreignObject = node.append('foreignObject')
+            .attr('width', this.config.codeBlockWidth)
+            .attr('height', d => {
+                const codeInfo = this.prepareCodeForNode(d);
+                d.codeInfo = codeInfo; // Store for later use
+                const lineHeight = this.config.codeBlockFontSize * 1.5;
+                const headerHeight = 30;
+                const footerHeight = codeInfo.totalLines > codeInfo.lines ? 20 : 0;
+                return headerHeight + (codeInfo.lines * lineHeight) + footerHeight + 20;
+            })
+            .attr('x', d => -this.config.codeBlockWidth / 2)
+            .attr('y', d => -d.codeInfo.lines * this.config.codeBlockFontSize * 1.5 / 2 - 15);
 
-        // Add labels
-        node.append('text')
-            .text(d => d.name)
-            .attr('dy', d => d.isTarget ? 40 : 30)
-            .style('display', this.config.showLabels ? 'block' : 'none')
-            .style('font-size', d => d.isTarget ? '14px' : '12px')
-            .style('font-weight', d => d.isTarget ? 'bold' : 'normal');
+        // Add HTML content
+        foreignObject.append('xhtml:div')
+            .attr('class', d => {
+                let classes = 'code-node';
+                if (d.isTarget) classes += ' target';
+                if (d.external) classes += ' external';
+                if (this.detachedNodes.has(d.file)) classes += ' detached';
+                return classes;
+            })
+            .html(d => d.codeInfo.html);
 
-        // Add tooltips
-        node.append('title')
-            .text(d => `${d.name}\n${d.kind} in ${d.package || 'external'}`);
+        // Attach detach button handlers after DOM is ready
+        setTimeout(() => {
+            document.querySelectorAll('.detach-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Don't trigger node click
+                    const file = btn.getAttribute('data-file');
+                    this.toggleDetach(file);
+                });
+            });
+        }, 50);
+
+        // Store dimensions for collision detection
+        node.each(d => {
+            d.width = this.config.codeBlockWidth;
+            d.height = d.codeInfo.lines * this.config.codeBlockFontSize * 1.5 + 50;
+        });
+
+        // Update collision force with actual node dimensions
+        this.simulation.force('collision', d3.forceCollide()
+            .radius(d => {
+                // Use diagonal of rectangle + padding for collision
+                const width = d.width || 400;
+                const height = d.height || 200;
+                const diagonal = Math.sqrt(width * width + height * height) / 2;
+                return diagonal + 30; // Add 30px padding
+            })
+            .strength(0.8) // Strong collision avoidance
+            .iterations(3)); // Multiple iterations for better separation
+
+        // Restart simulation to apply new collision
+        this.simulation.alpha(1).restart();
+
+        // Apply Prism syntax highlighting to all code blocks
+        setTimeout(() => {
+            if (typeof Prism !== 'undefined') {
+                document.querySelectorAll('.code-node-code code').forEach(block => {
+                    Prism.highlightElement(block);
+                });
+            }
+        }, 100);
+
+        // Create links AFTER nodes (so they render on top)
+        const linkGroup = g.append('g').attr('class', 'links');
+
+        const link = linkGroup
+            .selectAll('line')
+            .data(this.links)
+            .join('line')
+            .attr('class', 'link')
+            .attr('stroke-width', d => 1 + d.depth * 0.5);
+
+        // Add connection point circles (on top of everything)
+        const connectionPoints = g.append('g').attr('class', 'connection-points');
+
+        // Source points (red)
+        const sourcePoints = connectionPoints
+            .selectAll('.source-point')
+            .data(this.links)
+            .join('circle')
+            .attr('class', 'connection-point source')
+            .attr('r', 5);
+
+        // Target points (teal)
+        const targetPoints = connectionPoints
+            .selectAll('.target-point')
+            .data(this.links)
+            .join('circle')
+            .attr('class', 'connection-point target')
+            .attr('r', 5);
 
         // Update positions on simulation tick
         this.simulation.on('tick', () => {
             link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
+                .attr('x1', d => this.getLinkX1(d))
+                .attr('y1', d => this.getLinkY1(d))
+                .attr('x2', d => this.getLinkX2(d))
+                .attr('y2', d => this.getLinkY2(d))
+                .style('opacity', d => {
+                    // Hide links if either node is detached
+                    const sourceDetached = this.detachedNodes.has(d.source.file);
+                    const targetDetached = this.detachedNodes.has(d.target.file);
+                    return (sourceDetached || targetDetached) ? 0 : null;
+                });
+
+            sourcePoints
+                .attr('cx', d => this.getLinkX1(d))
+                .attr('cy', d => this.getLinkY1(d))
+                .style('opacity', d => {
+                    const sourceDetached = this.detachedNodes.has(d.source.file);
+                    const targetDetached = this.detachedNodes.has(d.target.file);
+                    return (sourceDetached || targetDetached) ? 0 : null;
+                });
+
+            targetPoints
+                .attr('cx', d => this.getLinkX2(d))
+                .attr('cy', d => this.getLinkY2(d))
+                .style('opacity', d => {
+                    const sourceDetached = this.detachedNodes.has(d.source.file);
+                    const targetDetached = this.detachedNodes.has(d.target.file);
+                    return (sourceDetached || targetDetached) ? 0 : null;
+                });
 
             node.attr('transform', d => `translate(${d.x},${d.y})`);
         });
@@ -289,6 +738,9 @@ class GoScopeVisualizer {
 
         // Convert map to array
         this.nodes = Array.from(fileMap.values());
+
+        // Filter hidden files
+        this.nodes = this.nodes.filter(n => !this.hiddenFiles.has(n.file));
 
         // Filter external nodes if needed
         if (!this.config.showExternal) {
@@ -386,6 +838,78 @@ class GoScopeVisualizer {
         const nodeSteps = nodeDepth - commonLength;
 
         return targetSteps + nodeSteps;
+    }
+
+    // Prepare code for display in graph nodes
+    prepareCodeForNode(node) {
+        if (!node.symbols || node.symbols.length === 0) {
+            return { html: '<div class="empty-code">No code available</div>', lines: 1, symbolLineMap: {} };
+        }
+
+        // Combine all symbol code from this file
+        let allCode = '';
+        let symbolMap = []; // Track which lines belong to which symbol
+        let symbolLineMap = {}; // Map symbol names to their line ranges
+
+        node.symbols.forEach((symbol, idx) => {
+            if (symbol.code) {
+                const lines = symbol.code.split('\n');
+                const startLine = allCode.split('\n').length;
+                const endLine = startLine + lines.length - 1;
+
+                // Store symbol's line range
+                symbolLineMap[symbol.name] = {
+                    startLine: startLine,
+                    endLine: endLine,
+                    middleLine: Math.floor((startLine + endLine) / 2)
+                };
+
+                lines.forEach((line, lineIdx) => {
+                    symbolMap.push({
+                        symbolIdx: idx,
+                        symbolName: symbol.name,
+                        lineInSymbol: lineIdx,
+                        globalLine: startLine + lineIdx
+                    });
+                });
+
+                allCode += symbol.code + '\n\n';
+            }
+        });
+
+        // Truncate if too long
+        const lines = allCode.split('\n');
+        const maxLines = this.config.codeBlockMaxLines;
+        let truncated = false;
+        let displayLines = lines;
+
+        if (lines.length > maxLines) {
+            displayLines = lines.slice(0, maxLines);
+            truncated = true;
+        }
+
+        // Escape HTML
+        const escaped = displayLines.map(l => this.escapeHtml(l)).join('\n');
+
+        const isDetached = this.detachedNodes.has(node.file);
+        const html = `<div class="code-node-content">
+            <div class="code-node-header">
+                <span class="node-filename">${node.name}</span>
+                <button class="detach-btn" data-file="${node.file}" title="${isDetached ? 'Click to reattach' : 'Detach this node'}">
+                    ${isDetached ? '📌' : '✓'}
+                </button>
+            </div>
+            <pre class="code-node-code language-go"><code class="language-go">${escaped}</code></pre>
+            ${truncated ? '<div class="code-node-truncated">... +' + (lines.length - maxLines) + ' more lines</div>' : ''}
+        </div>`;
+
+        return {
+            html,
+            lines: displayLines.length,
+            symbolMap,
+            symbolLineMap,
+            totalLines: lines.length
+        };
     }
 
     showNodeDetails(node, fromHistory = false) {
@@ -815,6 +1339,90 @@ class GoScopeVisualizer {
             this.zoom.transform,
             d3.zoomIdentity.translate(0, 0).scale(1)
         );
+    }
+
+    toggleFullscreen() {
+        const graphPanel = document.querySelector('.graph-panel');
+
+        if (!document.fullscreenElement) {
+            // Enter fullscreen
+            if (graphPanel.requestFullscreen) {
+                graphPanel.requestFullscreen();
+            } else if (graphPanel.webkitRequestFullscreen) { // Safari
+                graphPanel.webkitRequestFullscreen();
+            } else if (graphPanel.msRequestFullscreen) { // IE11
+                graphPanel.msRequestFullscreen();
+            }
+        } else {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { // Safari
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { // IE11
+                document.msExitFullscreen();
+            }
+        }
+    }
+
+    // Calculate link anchor points at specific code lines
+    getLineYOffset(node, symbolName) {
+        if (!node.codeInfo || !node.codeInfo.symbolLineMap) {
+            return 0; // Default to center
+        }
+
+        const symbolInfo = node.codeInfo.symbolLineMap[symbolName];
+        if (!symbolInfo) {
+            return 0; // Symbol not found, use center
+        }
+
+        // Use the middle line of the symbol
+        const lineNumber = symbolInfo.middleLine;
+        const lineHeight = this.config.codeBlockFontSize * 1.5;
+        const headerHeight = 30;
+
+        // Calculate offset from node center
+        const totalHeight = node.codeInfo.lines * lineHeight;
+        const nodeTop = -totalHeight / 2 - 15; // Top of the code block
+        const lineY = nodeTop + headerHeight + (lineNumber * lineHeight) + (lineHeight / 2);
+
+        return lineY;
+    }
+
+    getLinkX1(link) {
+        // Source node x position
+        return link.source.x;
+    }
+
+    getLinkY1(link) {
+        // Source node y position at specific line
+        if (!link.symbols || link.symbols.length === 0) {
+            return link.source.y;
+        }
+
+        // Use the first symbol connection as representative
+        const firstConnection = link.symbols[0];
+        const lineOffset = this.getLineYOffset(link.source, firstConnection.from);
+
+        return link.source.y + lineOffset;
+    }
+
+    getLinkX2(link) {
+        // Target node x position
+        return link.target.x;
+    }
+
+    getLinkY2(link) {
+        // Target node y position at specific line
+        if (!link.symbols || link.symbols.length === 0) {
+            return link.target.y;
+        }
+
+        // Use the first symbol connection as representative
+        const firstConnection = link.symbols[0];
+        const lineOffset = this.getLineYOffset(link.target, firstConnection.to);
+
+        return link.target.y + lineOffset;
     }
 
     toggleLabels() {

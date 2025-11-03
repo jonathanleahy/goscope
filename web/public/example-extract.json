@@ -1,0 +1,119 @@
+{
+  "target": {
+    "id": "example.com/ex1/pkg/math.Add",
+    "name": "Add",
+    "kind": "func",
+    "package": "example.com/ex1/pkg/math",
+    "file": "/home/jon/personal/extract-scope-go/examples/ex1/pkg/math/add.go",
+    "line": 7,
+    "endLine": 13,
+    "code": "func Add(a, b int) int {\n\tif !validateInputs(a, b) {\n\t\tfmt.Println(\"invalid inputs\")\n\t\treturn 0\n\t}\n\treturn a + b\n}",
+    "doc": "Add returns the sum of two integers.\nIt validates inputs before adding them.\n",
+    "exported": true,
+    "depth": 0,
+    "isTarget": true,
+    "external": false,
+    "stub": false
+  },
+  "nodes": [
+    {
+      "id": "example.com/ex1/pkg/math.validateInputs",
+      "name": "validateInputs",
+      "kind": "func",
+      "package": "example.com/ex1/pkg/math",
+      "file": "/home/jon/personal/extract-scope-go/examples/ex1/pkg/math/util.go",
+      "line": 4,
+      "endLine": 6,
+      "code": "func validateInputs(a, b int) bool {\n\treturn a \u003e= 0 \u0026\u0026 b \u003e= 0\n}",
+      "doc": "validateInputs checks if both inputs are non-negative\n",
+      "exported": false,
+      "depth": 1,
+      "isTarget": false,
+      "external": false,
+      "stub": false
+    },
+    {
+      "id": "fmt.Println",
+      "name": "Println",
+      "kind": "func",
+      "package": "fmt",
+      "file": "",
+      "line": 0,
+      "endLine": 0,
+      "code": "",
+      "exported": true,
+      "depth": 1,
+      "isTarget": false,
+      "external": true,
+      "stub": true
+    },
+    {
+      "id": "example.com/ex1/pkg/math.fmt",
+      "name": "fmt",
+      "kind": "unknown",
+      "package": "example.com/ex1/pkg/math",
+      "file": "/home/jon/personal/extract-scope-go/examples/ex1/pkg/math/add.go",
+      "line": 3,
+      "endLine": 0,
+      "code": "",
+      "exported": false,
+      "depth": 1,
+      "isTarget": false,
+      "external": false,
+      "stub": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "Add",
+      "to": "validateInputs",
+      "type": "direct-call",
+      "depth": 1,
+      "label": "direct-call"
+    },
+    {
+      "from": "Add",
+      "to": "Add",
+      "type": "direct-call",
+      "depth": 1,
+      "label": "direct-call"
+    },
+    {
+      "from": "Add",
+      "to": "Println",
+      "type": "direct-call",
+      "depth": 1,
+      "label": "direct-call"
+    },
+    {
+      "from": "Add",
+      "to": "fmt",
+      "type": "direct-call",
+      "depth": 1,
+      "label": "direct-call"
+    },
+    {
+      "from": "validateInputs",
+      "to": "validateInputs",
+      "type": "direct-call",
+      "depth": 2,
+      "label": "direct-call"
+    }
+  ],
+  "external": [
+    "fmt.Println"
+  ],
+  "options": {
+    "Depth": 3,
+    "Format": "json",
+    "StubExternal": false,
+    "ShowCallers": false,
+    "ShowTests": false,
+    "ContextLines": 0,
+    "Annotate": false,
+    "IncludeMetrics": false,
+    "GitBlame": false
+  },
+  "totalLayers": 2,
+  "detectedDIFramework": "none"
+}

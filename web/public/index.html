@@ -29,6 +29,7 @@
                 <button id="zoom-out" class="btn btn-icon" title="Zoom Out">➖</button>
                 <button id="reset-view" class="btn btn-icon" title="Reset View">🎯</button>
                 <button id="toggle-labels" class="btn btn-icon" title="Toggle Labels">🏷️</button>
+                <button id="fullscreen" class="btn btn-icon" title="Toggle Fullscreen">⛶</button>
             </div>
 
             <div class="control-group">
@@ -83,9 +84,27 @@
                 </div>
             </div>
 
+            <!-- Middle Panel: Folder Tree -->
+            <div class="panel folder-panel" id="folder-panel">
+                <div class="resize-handle" id="folder-resize-handle"></div>
+                <div class="panel-header">
+                    <h2>📁 Project Files</h2>
+                    <div class="folder-controls">
+                        <button id="expand-all" class="btn btn-icon" title="Expand All">⊕</button>
+                        <button id="collapse-all" class="btn btn-icon" title="Collapse All">⊖</button>
+                        <button id="show-all-files" class="btn btn-icon" title="Show All Files">👁️</button>
+                    </div>
+                </div>
+                <div id="folder-tree" class="folder-tree">
+                    <div class="empty-state">
+                        Load a JSON file to see project structure
+                    </div>
+                </div>
+            </div>
+
             <!-- Right Panel: Code Display -->
             <div class="panel code-panel" id="code-panel">
-                <div class="resize-handle" id="resize-handle"></div>
+                <div class="resize-handle" id="code-resize-handle"></div>
                 <div class="panel-header">
                     <div class="nav-controls">
                         <button id="nav-back" class="btn btn-icon" title="Go back" disabled>◀</button>
@@ -129,8 +148,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
-    <script src="app.js?v=17"></script>
-    <script src="app-simple.js?v=17"></script>
+    <script src="app.js?v=24"></script>
+    <script src="app-simple.js?v=24"></script>
     <script>
         // Store reference for monkey patch
         document.addEventListener('DOMContentLoaded', () => {
